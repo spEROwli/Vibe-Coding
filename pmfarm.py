@@ -1,23 +1,35 @@
 #!/usr/bin/env python3
 """
-pmfarm.py — Pull live PM roles straight from public ATS APIs.
-Sources: Greenhouse, Ashby, Lever.
-Edit COMPANIES and FILTERS, then: python3 pmfarm.py
-"""
-import urllib.request, json, re, html as H, csv, datetime, sys, time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+pmfarm.py — PM role scraper: Greenhouse · Ashby · Lever
 
-# ---------- FILTERS (edit these) ----------
+Local use (direct API, works outside Claude Code cloud):
+  python3 pmfarm.py [--remote-only]
+
+Claude Code iOS (WebSearch pipeline):
+  python3 pmfarm.py queries
+  python3 pmfarm.py process FILE [--remote-only]
+
+Dedupe: put an applied.csv (columns: company, url) next to this script.
+        Any role whose URL — or company+title pair — matches is silently skipped.
+        Fill the `applied` column in pm_roles.csv as you go; that file can serve
+        as next run's applied.csv.
+"""
+
+import argparse, csv, datetime, html as H, json, re, sys, urllib.request
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urlparse
+
+# ── FILTERS ──────────────────────────────────────────────────────────────────
 TITLE_MUST_INCLUDE = ["product manager", "associate product"]
 TITLE_EXCLUDE      = ["marketing", "program manager"]
 SENIORITY_EXCLUDE  = ["senior", "sr.", "staff", "principal", "lead", "director",
                       "head of", "vp ", "vice president", " ii", " iii"]
-MAX_PM_YEARS       = 3          # drop roles asking more than this; None = keep all
-LOCATIONS          = ["new york", "nyc", "brooklyn", "manhattan", "remote",
-                      "united states", "anywhere", "us"]   # substring match, lowercase
-# ------------------------------------------
 
-# ---------- COMPANIES (edit freely) ----------
+NYC_LOCS    = ["new york", "nyc", "brooklyn", "manhattan"]
+REMOTE_LOCS = ["remote", "united states", "anywhere", "us", "nationwide",
+               "distributed", "work from anywhere", "work from home"]
+
+# ── COMPANIES ─────────────────────────────────────────────────────────────────
 GREENHOUSE = [
     "betterment", "robinhood", "justworks", "mongodb", "datadog", "figma",
     "stripe", "brex", "plaid", "affirm", "sofi", "gusto", "rippling",
@@ -25,31 +37,145 @@ GREENHOUSE = [
     "duolingo", "airtable", "benchling", "cockroachlabs", "coda",
     "gemini", "navan", "whatnot", "modal", "replit",
 ]
-
 ASHBY = [
     "notion", "harvey", "ramp", "cohere", "linear", "supabase", "mercury",
     "vanta", "clay", "deel", "retool", "scale", "perplexity", "vercel",
     "anyscale", "cursor", "glean", "watershed", "alchemy", "dbt-labs",
     "openai", "anthropic", "arc", "prefect", "runway",
 ]
-
 LEVER = [
     "airbnb", "shopify", "canva", "asana", "zendesk", "squarespace",
     "intercom", "netlify", "sendbird", "postman", "contentful",
     "amplitude", "mixpanel", "segment", "heap", "fullstory",
     "pagerduty", "fastly", "cloudflare", "hashicorp",
 ]
-# ------------------------------------------
+
+ATS_DOMAINS = {
+    "boards.greenhouse.io": "Greenhouse",
+    "jobs.lever.co":        "Lever",
+    "jobs.ashbyhq.com":     "Ashby",
+}
 
 YEARS_RE = re.compile(
     r'(\d+)\+?\s*(?:–|-|to)\s*(\d+)\s*years?|(\d+)\+\s*years?|(\d+)\s*years?\s*of\s*experience',
     re.IGNORECASE,
 )
 
+CHUNK        = 8
+NEG          = ' -"senior" -"staff" -"principal" -"director" -"lead"'
+APPLIED_FILE = "applied.csv"
+OUTPUT_FILE  = "pm_roles.csv"
 
-def _fetch(url: str, payload: bytes | None = None, headers: dict | None = None) -> dict | list | None:
-    req = urllib.request.Request(url, data=payload, headers=headers or {})
-    req.add_header("User-Agent", "pmfarm/1.0 job-research-bot")
+
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+def _strip_html(text: str) -> str:
+    return H.unescape(re.sub(r"<[^>]+>", " ", text or "")).strip()
+
+
+def _chunks(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i+n]
+
+
+def _parse_years(text: str) -> tuple[str, str]:
+    """Return (years_raw, years_context). Surfaces the max year count found."""
+    best_n, best_ctx = None, ""
+    for m in YEARS_RE.finditer(text):
+        nums = [int(g) for g in m.groups() if g]
+        if not nums:
+            continue
+        n = max(nums)
+        if best_n is None or n > best_n:
+            best_n   = n
+            s        = max(0, m.start() - 35)
+            e        = min(len(text), m.end() + 35)
+            best_ctx = "…" + text[s:e].replace("\n", " ").strip() + "…"
+    return (str(best_n) if best_n is not None else "unknown", best_ctx)
+
+
+def _loc_class(location: str, snippet: str) -> str:
+    combined   = (location + " " + snippet).lower()
+    has_remote = any(r in combined for r in REMOTE_LOCS)
+    has_nyc    = any(n in combined for n in NYC_LOCS)
+    if has_remote and has_nyc:
+        return "remote+nyc"
+    if has_remote:
+        return "remote"
+    if has_nyc:
+        return "nyc"
+    return "unknown"
+
+
+def _days_old(date_str: str | None) -> str:
+    if not date_str:
+        return "unknown"
+    try:
+        dt    = datetime.datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+        delta = datetime.datetime.now(datetime.timezone.utc) - dt
+        return str(delta.days)
+    except Exception:
+        return "unknown"
+
+
+def _passes_title(title: str) -> bool:
+    t = title.lower()
+    return (any(kw in t for kw in TITLE_MUST_INCLUDE)
+            and not any(kw in t for kw in TITLE_EXCLUDE)
+            and not any(kw in t for kw in SENIORITY_EXCLUDE))
+
+
+def _passes_location(lc: str, remote_only: bool) -> bool:
+    if remote_only:
+        return lc in ("remote", "remote+nyc", "unknown")
+    return lc in ("remote", "remote+nyc", "nyc", "unknown")
+
+
+def _load_applied() -> set[str]:
+    seen: set[str] = set()
+    try:
+        with open(APPLIED_FILE, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                if row.get("url"):
+                    seen.add(row["url"].strip().lower())
+                if row.get("company") and row.get("title"):
+                    seen.add(f"{row['company'].strip().lower()}|{row['title'].strip().lower()}")
+    except FileNotFoundError:
+        pass
+    return seen
+
+
+def _deduped(jobs: list[dict], applied: set[str]) -> list[dict]:
+    out = []
+    for j in jobs:
+        if (j["url"].strip().lower() in applied or
+                f"{j['company'].strip().lower()}|{j['title'].strip().lower()}" in applied):
+            continue
+        out.append(j)
+    return out
+
+
+def _make_job(source, company, title, location, url, snippet, date_str) -> dict:
+    lc            = _loc_class(location, snippet)
+    years_raw, yc = _parse_years(snippet)
+    return {
+        "source":        source,
+        "company":       company,
+        "title":         title,
+        "location":      location,
+        "loc_class":     lc,
+        "url":           url,
+        "days_old":      _days_old(date_str),
+        "years_raw":     years_raw,
+        "years_context": yc,
+        "applied":       "",
+    }
+
+
+# ── ATS fetchers ──────────────────────────────────────────────────────────────
+
+def _fetch(url: str) -> dict | list | None:
+    req = urllib.request.Request(url, headers={"User-Agent": "pmfarm/3.0"})
     try:
         with urllib.request.urlopen(req, timeout=12) as r:
             return json.loads(r.read())
@@ -57,190 +183,214 @@ def _fetch(url: str, payload: bytes | None = None, headers: dict | None = None) 
         return None
 
 
-def _strip_html(text: str) -> str:
-    text = re.sub(r"<[^>]+>", " ", text or "")
-    return H.unescape(text).strip()
-
-
-def _max_years_required(text: str) -> int | None:
-    """Return the highest years-of-experience number found in text, or None."""
-    nums = []
-    for m in YEARS_RE.finditer(text):
-        for g in m.groups():
-            if g is not None:
-                nums.append(int(g))
-    return max(nums) if nums else None
-
-
-# ── Greenhouse ──────────────────────────────────────────────────────────────
-
 def fetch_greenhouse(slug: str) -> list[dict]:
-    url = f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
-    data = _fetch(url)
-    if not data or "jobs" not in data:
+    data = _fetch(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true")
+    if not data:
         return []
-    results = []
-    for job in data["jobs"]:
-        title = job.get("title", "")
-        location = ""
-        locs = job.get("offices") or job.get("location", {})
-        if isinstance(locs, list):
-            location = ", ".join(o.get("name", "") for o in locs)
-        elif isinstance(locs, dict):
-            location = locs.get("name", "")
-        content = _strip_html(job.get("content", ""))
-        results.append({
-            "source":    "Greenhouse",
-            "company":   slug,
-            "title":     title,
-            "location":  location,
-            "url":       job.get("absolute_url", ""),
-            "posted":    job.get("updated_at", "")[:10],
-            "content":   content,
-        })
-    return results
+    out = []
+    for j in data.get("jobs", []):
+        title = j.get("title", "")
+        if not _passes_title(title):
+            continue
+        loc      = j.get("location", {})
+        location = loc.get("name", "") if isinstance(loc, dict) else ""
+        content  = _strip_html(j.get("content", ""))
+        out.append(_make_job(
+            "Greenhouse", slug, title, location,
+            j.get("absolute_url", ""), content[:500],
+            j.get("updated_at"),
+        ))
+    return out
 
-
-# ── Ashby ────────────────────────────────────────────────────────────────────
 
 def fetch_ashby(slug: str) -> list[dict]:
-    url = f"https://api.ashbyhq.com/posting-api/job-board/{slug}"
-    data = _fetch(url)
+    data = _fetch(f"https://api.ashbyhq.com/posting-api/job-board/{slug}")
     if not data:
         return []
     jobs = data if isinstance(data, list) else data.get("jobPostings", [])
-    results = []
-    for job in jobs:
-        title = job.get("title", "") or job.get("jobTitle", "")
-        location = job.get("location", "") or job.get("locationName", "")
-        job_url = job.get("jobUrl", "") or job.get("applyUrl", "")
-        posted = (job.get("publishedDate") or job.get("updatedAt") or "")[:10]
-        content = _strip_html(job.get("descriptionHtml", "") or job.get("description", ""))
-        results.append({
-            "source":   "Ashby",
-            "company":  slug,
-            "title":    title,
-            "location": location,
-            "url":      job_url,
-            "posted":   posted,
-            "content":  content,
-        })
-    return results
+    out  = []
+    for j in jobs:
+        title = j.get("title", "") or j.get("jobTitle", "")
+        if not _passes_title(title):
+            continue
+        location = j.get("location", "") or j.get("locationName", "")
+        content  = _strip_html(j.get("descriptionHtml", "") or j.get("description", ""))
+        out.append(_make_job(
+            "Ashby", slug, title, location,
+            j.get("jobUrl", "") or j.get("applyUrl", ""), content[:500],
+            None,   # Ashby does not reliably expose a post date
+        ))
+    return out
 
-
-# ── Lever ────────────────────────────────────────────────────────────────────
 
 def fetch_lever(slug: str) -> list[dict]:
-    url = f"https://api.lever.co/v0/postings/{slug}?mode=json&limit=250"
-    data = _fetch(url)
+    data = _fetch(f"https://api.lever.co/v0/postings/{slug}?mode=json&limit=250")
     if not data:
         return []
     jobs = data if isinstance(data, list) else data.get("postings", [])
-    results = []
-    for job in jobs:
-        title = job.get("text", "")
-        cats  = job.get("categories", {})
-        location = cats.get("location", "") or cats.get("allLocations", [""])[0] \
-            if isinstance(cats.get("allLocations"), list) else cats.get("location", "")
-        job_url = job.get("hostedUrl", "") or job.get("applyUrl", "")
-        posted  = datetime.datetime.fromtimestamp(
-            job["createdAt"] / 1000
-        ).date().isoformat() if job.get("createdAt") else ""
-        lists = job.get("lists", [])
-        content = " ".join(_strip_html(li.get("content", "")) for li in lists)
-        content += " " + _strip_html(job.get("descriptionPlain", "") or job.get("description", ""))
-        results.append({
-            "source":   "Lever",
-            "company":  slug,
-            "title":    title,
-            "location": location,
-            "url":      job_url,
-            "posted":   posted,
-            "content":  content.strip(),
+    out  = []
+    for j in jobs:
+        title = j.get("text", "")
+        if not _passes_title(title):
+            continue
+        cats     = j.get("categories", {})
+        location = cats.get("location", "")
+        content  = " ".join(_strip_html(li.get("content", "")) for li in j.get("lists", []))
+        ts       = j.get("createdAt")
+        date_str = (datetime.datetime.utcfromtimestamp(ts / 1000).isoformat() + "Z") if ts else None
+        out.append(_make_job(
+            "Lever", slug, title, location,
+            j.get("hostedUrl", ""), content[:500],
+            date_str,
+        ))
+    return out
+
+
+# ── output ─────────────────────────────────────────────────────────────────────
+
+def _sort_key(j: dict) -> tuple:
+    loc_order = {"remote": 0, "remote+nyc": 1, "nyc": 2, "unknown": 3}
+    order = loc_order.get(j["loc_class"], 4)
+    try:
+        age = int(j["days_old"])
+    except (ValueError, TypeError):
+        age = 9999
+    return (order, age)
+
+
+def _output(jobs: list[dict], skipped: int = 0):
+    jobs.sort(key=_sort_key)
+
+    print(f"\n{'─' * 72}")
+    for j in jobs:
+        age = f"{j['days_old']}d" if j["days_old"] != "unknown" else "?d"
+        yrs = j["years_raw"] if j["years_raw"] != "unknown" else "?"
+        print(f"[{j['source']:11s}] {j['company']:18s}  {j['title']}")
+        print(f"  {(j['location'] or j['loc_class']):32s}  age={age:<6s}  yrs_req={yrs}")
+        if j["years_context"]:
+            print(f"  \"{j['years_context'][:90]}\"")
+        print(f"  {j['url']}\n")
+
+    if skipped:
+        print(f"(skipped {skipped} already-applied role(s) from {APPLIED_FILE})\n")
+
+    fields = ["source", "company", "title", "location", "loc_class",
+              "url", "days_old", "years_raw", "years_context", "applied"]
+    with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
+        csv.DictWriter(f, fieldnames=fields).writeheader()
+        csv.DictWriter(f, fieldnames=fields).writerows(jobs)
+    print(f"Saved {len(jobs)} role(s) → {OUTPUT_FILE}")
+    print(f"Fill the 'applied' column as you go. Save as {APPLIED_FILE} to dedupe next run.")
+
+
+# ── phase 1: query generation (Claude Code iOS) ───────────────────────────────
+
+def cmd_queries():
+    specs = [
+        ("boards.greenhouse.io", GREENHOUSE),
+        ("jobs.ashbyhq.com",     ASHBY),
+        ("jobs.lever.co",        LEVER),
+    ]
+    out = []
+    for domain, companies in specs:
+        for chunk in _chunks(companies, CHUNK):
+            sites = " OR ".join(f"site:{domain}/{c}" for c in chunk)
+            out.append({"query": f'({sites}) "product manager"{NEG}', "domain": domain})
+    print(json.dumps(out, indent=2))
+
+
+# ── phase 2: process WebSearch results (Claude Code iOS) ─────────────────────
+
+def cmd_process(path: str, remote_only: bool):
+    with open(path) as f:
+        raw = json.load(f)
+
+    applied = _load_applied()
+    jobs    = []
+    for item in raw:
+        url     = item.get("url", "")
+        title   = item.get("title", "")
+        snippet = item.get("snippet", "") or item.get("description", "")
+        domain  = urlparse(url).netloc.lstrip("www.")
+        if domain not in ATS_DOMAINS or not _passes_title(title):
+            continue
+        lc = _loc_class("", snippet)
+        if not _passes_location(lc, remote_only):
+            continue
+        company       = urlparse(url).path.lstrip("/").split("/")[0]
+        years_raw, yc = _parse_years(snippet)
+        jobs.append({
+            "source":        ATS_DOMAINS[domain],
+            "company":       company,
+            "title":         title,
+            "location":      "",
+            "loc_class":     lc,
+            "url":           url,
+            "days_old":      "unknown",
+            "years_raw":     years_raw,
+            "years_context": yc,
+            "applied":       "",
         })
-    return results
+
+    pre     = len(jobs)
+    jobs    = _deduped(jobs, applied)
+    skipped = pre - len(jobs)
+    _output(jobs, skipped)
 
 
-# ── Filtering ────────────────────────────────────────────────────────────────
+# ── local mode ────────────────────────────────────────────────────────────────
 
-def passes_filters(job: dict) -> bool:
-    title_lo = job["title"].lower()
-    loc_lo   = job["location"].lower()
-    content  = (job["title"] + " " + job["content"]).lower()
+def cmd_local(remote_only: bool):
+    tasks = ([(fetch_greenhouse, s) for s in GREENHOUSE] +
+             [(fetch_ashby,      s) for s in ASHBY] +
+             [(fetch_lever,      s) for s in LEVER])
 
-    if not any(kw in title_lo for kw in TITLE_MUST_INCLUDE):
-        return False
-
-    if any(kw in title_lo for kw in TITLE_EXCLUDE):
-        return False
-
-    if any(kw in title_lo for kw in SENIORITY_EXCLUDE):
-        return False
-
-    if LOCATIONS and not any(loc in loc_lo for loc in LOCATIONS):
-        return False
-
-    if MAX_PM_YEARS is not None:
-        yrs = _max_years_required(content)
-        if yrs is not None and yrs > MAX_PM_YEARS:
-            return False
-
-    return True
-
-
-# ── Main ─────────────────────────────────────────────────────────────────────
-
-def scrape_all() -> list[dict]:
-    tasks = (
-        [(fetch_greenhouse, s) for s in GREENHOUSE] +
-        [(fetch_ashby,      s) for s in ASHBY] +
-        [(fetch_lever,      s) for s in LEVER]
-    )
-
-    all_jobs: list[dict] = []
+    raw: list[dict] = []
     with ThreadPoolExecutor(max_workers=12) as pool:
-        futures = {pool.submit(fn, slug): (fn.__name__, slug) for fn, slug in tasks}
-        for fut in as_completed(futures):
-            fn_name, slug = futures[fut]
+        futs = {pool.submit(fn, slug): (fn.__name__, slug) for fn, slug in tasks}
+        for fut in as_completed(futs):
+            fn_name, slug = futs[fut]
             try:
-                jobs = fut.result()
-                all_jobs.extend(jobs)
-                if jobs:
-                    print(f"  {fn_name}({slug}): {len(jobs)} jobs fetched")
-            except Exception as exc:
-                print(f"  {fn_name}({slug}) error: {exc}", file=sys.stderr)
+                rows = fut.result()
+                if rows:
+                    print(f"  {fn_name}({slug}): {len(rows)} matched title filter")
+                raw.extend(rows)
+            except Exception as e:
+                print(f"  {fn_name}({slug}) error: {e}", file=sys.stderr)
 
-    return all_jobs
+    filtered = [j for j in raw if _passes_location(j["loc_class"], remote_only)]
+    applied  = _load_applied()
+    pre      = len(filtered)
+    jobs     = _deduped(filtered, applied)
+    skipped  = pre - len(jobs)
+    print(f"\n{len(raw)} title-matched → {len(filtered)} after location → {len(jobs)} after dedupe")
+    _output(jobs, skipped)
 
+
+# ── entry point ───────────────────────────────────────────────────────────────
 
 def main():
-    print("Fetching jobs …")
-    raw = scrape_all()
-    print(f"\nTotal fetched : {len(raw)}")
+    p = argparse.ArgumentParser(
+        description="PM role scraper — Greenhouse, Ashby, Lever",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=__doc__,
+    )
+    p.add_argument("cmd", nargs="?", default="local",
+                   choices=["local", "queries", "process"],
+                   help="local (default), queries, or process FILE")
+    p.add_argument("file", nargs="?", help="WebSearch results JSON (process mode only)")
+    p.add_argument("--remote-only", action="store_true",
+                   help="Remote/US-wide roles only; drop NYC-specific listings")
+    args = p.parse_args()
 
-    filtered = [j for j in raw if passes_filters(j)]
-    print(f"After filters : {len(filtered)}")
-
-    filtered.sort(key=lambda j: (j["company"], j["title"]))
-
-    # ── terminal preview ──────────────────────────────────────────────────
-    print("\n" + "─" * 72)
-    for j in filtered:
-        print(f"[{j['source']}] {j['company']:20s}  {j['title']}")
-        print(f"  {j['location']:30s}  {j['posted']}")
-        print(f"  {j['url']}")
-        print()
-
-    # ── CSV export ────────────────────────────────────────────────────────
-    ts       = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-    filename = f"pm_roles_{ts}.csv"
-    fields   = ["source", "company", "title", "location", "posted", "url"]
-    with open(filename, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(filtered)
-
-    print(f"Saved {len(filtered)} roles → {filename}")
+    if args.cmd == "queries":
+        cmd_queries()
+    elif args.cmd == "process":
+        if not args.file:
+            p.error("'process' requires a FILE argument")
+        cmd_process(args.file, args.remote_only)
+    else:
+        cmd_local(args.remote_only)
 
 
 if __name__ == "__main__":
