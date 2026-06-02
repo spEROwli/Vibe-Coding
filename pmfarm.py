@@ -20,34 +20,56 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urlparse
 
 # ── FILTERS ──────────────────────────────────────────────────────────────────
-TITLE_MUST_INCLUDE = ["product manager", "associate product"]
-TITLE_EXCLUDE      = ["marketing", "program manager"]
+TITLE_MUST_INCLUDE = [
+    "product manager", "associate product", "technical product",
+    "hardware product", "apm program", "rotational product",
+]
+TITLE_EXCLUDE      = ["marketing", "program manager", "product marketing"]
 SENIORITY_EXCLUDE  = ["senior", "sr.", "staff", "principal", "lead", "director",
-                      "head of", "vp ", "vice president", " ii", " iii"]
+                      "head of", "vp ", "vice president", " ii", " iii", "group product"]
 
 NYC_LOCS    = ["new york", "nyc", "brooklyn", "manhattan"]
 REMOTE_LOCS = ["remote", "united states", "anywhere", "us", "nationwide",
                "distributed", "work from anywhere", "work from home"]
 
+# Keywords in description that signal the role values engineering background.
+# Surfaced in terminal output as a "signal" flag — not used for filtering.
+HARDWARE_SIGNAL = [
+    "mechanical engineer", "hardware", "medical device", "med device",
+    "regulated", "fda", "iso 13485", "physical product", "manufacturing",
+    "embedded", "firmware", "iot", "wearable", "sensor",
+]
+
 # ── COMPANIES ─────────────────────────────────────────────────────────────────
+# Pure-software / fintech — competitive without PM experience
 GREENHOUSE = [
     "betterment", "robinhood", "justworks", "mongodb", "datadog", "figma",
     "stripe", "brex", "plaid", "affirm", "sofi", "gusto", "rippling",
     "doubleverify", "pinterest", "carta", "hubspot", "webflow", "etsy",
     "duolingo", "airtable", "benchling", "cockroachlabs", "coda",
     "gemini", "navan", "whatnot", "modal", "replit",
+    # Healthtech / med-adjacent — your background is a differentiator here
+    "hingehealth", "springhealth", "headway", "cerebral", "lyra",
+    "ro", "twentyeight-health", "tempus", "color", "flatiron",
+    # Hardware-adjacent — engineering background valued
+    "peloton", "whoop", "oura", "brilliant", "verkada",
 ]
 ASHBY = [
     "notion", "harvey", "ramp", "cohere", "linear", "supabase", "mercury",
     "vanta", "clay", "deel", "retool", "scale", "perplexity", "vercel",
     "anyscale", "cursor", "glean", "watershed", "alchemy", "dbt-labs",
     "openai", "anthropic", "arc", "prefect", "runway",
+    # Healthtech
+    "nuvation", "sword-health", "kry", "nirahealth", "zealthy",
+    "turquoise-health", "ribbon-health", "available",
 ]
 LEVER = [
     "airbnb", "shopify", "canva", "asana", "zendesk", "squarespace",
     "intercom", "netlify", "sendbird", "postman", "contentful",
     "amplitude", "mixpanel", "segment", "heap", "fullstory",
     "pagerduty", "fastly", "cloudflare", "hashicorp",
+    # APM programs and hardware companies that use Lever
+    "nuro", "astrazeneca", "veracyte",
 ]
 
 ATS_DOMAINS = {
@@ -168,6 +190,7 @@ def _make_job(source, company, title, location, url, snippet, date_str) -> dict:
         "days_old":      _days_old(date_str),
         "years_raw":     years_raw,
         "years_context": yc,
+        "hw_signal":     "YES" if any(kw in (title + " " + snippet).lower() for kw in HARDWARE_SIGNAL) else "",
         "applied":       "",
     }
 
@@ -265,7 +288,8 @@ def _output(jobs: list[dict], skipped: int = 0):
     for j in jobs:
         age = f"{j['days_old']}d" if j["days_old"] != "unknown" else "?d"
         yrs = j["years_raw"] if j["years_raw"] != "unknown" else "?"
-        print(f"[{j['source']:11s}] {j['company']:18s}  {j['title']}")
+        hw = "  *** HW/MEDTECH SIGNAL ***" if j.get("hw_signal") else ""
+        print(f"[{j['source']:11s}] {j['company']:18s}  {j['title']}{hw}")
         print(f"  {(j['location'] or j['loc_class']):32s}  age={age:<6s}  yrs_req={yrs}")
         if j["years_context"]:
             print(f"  \"{j['years_context'][:90]}\"")
@@ -275,7 +299,7 @@ def _output(jobs: list[dict], skipped: int = 0):
         print(f"(skipped {skipped} already-applied role(s) from {APPLIED_FILE})\n")
 
     fields = ["source", "company", "title", "location", "loc_class",
-              "url", "days_old", "years_raw", "years_context", "applied"]
+              "url", "days_old", "years_raw", "years_context", "hw_signal", "applied"]
     with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
         csv.DictWriter(f, fieldnames=fields).writeheader()
         csv.DictWriter(f, fieldnames=fields).writerows(jobs)
@@ -319,6 +343,7 @@ def cmd_process(path: str, remote_only: bool):
             continue
         company       = urlparse(url).path.lstrip("/").split("/")[0]
         years_raw, yc = _parse_years(snippet)
+        hw = "YES" if any(kw in (title + " " + snippet).lower() for kw in HARDWARE_SIGNAL) else ""
         jobs.append({
             "source":        ATS_DOMAINS[domain],
             "company":       company,
@@ -329,6 +354,7 @@ def cmd_process(path: str, remote_only: bool):
             "days_old":      "unknown",
             "years_raw":     years_raw,
             "years_context": yc,
+            "hw_signal":     hw,
             "applied":       "",
         })
 
