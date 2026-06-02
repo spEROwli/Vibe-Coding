@@ -25,8 +25,17 @@ TITLE_MUST_INCLUDE = [
     "hardware product", "apm program", "rotational product",
 ]
 TITLE_EXCLUDE      = ["marketing", "program manager", "product marketing"]
-SENIORITY_EXCLUDE  = ["senior", "sr.", "staff", "principal", "lead", "director",
-                      "head of", "vp ", "vice president", " ii", " iii", "group product"]
+
+# Word-boundary regex — "lead" must not match "leadership", "staff" not "staffing", etc.
+# (?<!\w) / (?!\w) are lookaround equivalents of \b that work around "sr." having a
+# non-word char at the end.
+_SENIORITY_RE = re.compile(
+    r'(?<!\w)(?:senior|sr\.|staff|principal|lead|director|vp|vice\s+president)(?!\w)'
+    r'|(?<!\w)head\s+of\b'
+    r'|(?<!\w)group\s+product\b'
+    r'|\b(?:ii|iii)(?:\s|$)',
+    re.IGNORECASE,
+)
 
 NYC_LOCS    = ["new york", "nyc", "brooklyn", "manhattan"]
 REMOTE_LOCS = ["remote", "united states", "anywhere", "us", "nationwide",
@@ -186,9 +195,17 @@ def _days_old(date_str: str | None) -> str:
 
 def _passes_title(title: str) -> bool:
     t = title.lower()
-    return (any(kw in t for kw in TITLE_MUST_INCLUDE)
-            and not any(kw in t for kw in TITLE_EXCLUDE)
-            and not any(kw in t for kw in SENIORITY_EXCLUDE))
+    if not any(kw in t for kw in TITLE_MUST_INCLUDE):
+        return False
+    if any(kw in t for kw in TITLE_EXCLUDE):
+        return False
+    # Check seniority only in the pre-comma segment: "Product Manager, Senior Care"
+    # has "Senior" in the specialty area, not the level.  Real seniority markers
+    # ("Senior Product Manager", "Lead PM") always precede the role noun.
+    # Exception: roman-numeral suffixes like "II"/"III" appear after the role noun
+    # with no comma, so parts[0] still catches them ("Product Manager II").
+    main = t.split(",", 1)[0]
+    return not _SENIORITY_RE.search(main)
 
 
 def _passes_location(lc: str, remote_only: bool) -> bool:
