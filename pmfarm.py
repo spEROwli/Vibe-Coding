@@ -78,10 +78,28 @@ ATS_DOMAINS = {
     "jobs.ashbyhq.com":     "Ashby",
 }
 
-YEARS_RE = re.compile(
-    r'(\d+)\+?\s*(?:–|-|to)\s*(\d+)\s*years?|(\d+)\+\s*years?|(\d+)\s*years?\s*of\s*experience',
-    re.IGNORECASE,
-)
+# Requirement-style year patterns only. Deliberately NO bare "N years" pattern,
+# so phrasing like "10 years of combined team experience" is NOT mistaken for an
+# individual requirement. Each pattern's group(s) yield candidate year value(s);
+# for ranges we keep the LOW end (the minimum bar to clear).
+YEARS_PATTERNS = [
+    # range: "3-5 years", "3 to 5 years"  → low end
+    (re.compile(r'(\d+)\s*(?:–|—|-|to)\s*(\d+)\s*\+?\s*years?', re.I), "low"),
+    # plus: "5+ years"
+    (re.compile(r'(\d+)\s*\+\s*years?', re.I), "all"),
+    # "N+ years of [≤3 words] experience" — allows "of product management experience"
+    (re.compile(r'(\d+)\s*\+?\s*years?\s+of\s+(?:[\w-]+\s+){0,3}experience', re.I), "all"),
+    # in-domain: "2+ in product", "5+ years in marketing"
+    (re.compile(r'(\d+)\s*\+?\s*(?:years?\s+)?in\s+'
+                r'(?:product|marketing|software|tech|engineering|design|'
+                r'operations|consulting|business|industry)', re.I), "all"),
+    # "at least N years", "minimum of N years"
+    (re.compile(r'(?:at\s+least|minimum(?:\s+of)?|min\.?)\s+(\d+)\s*\+?\s*years?', re.I), "all"),
+]
+
+# A matched span containing any of these describes team/collective tenure,
+# not an individual PM requirement — so it is dropped.
+YEARS_DISQUALIFY = ["combined", "collective", "total", "company-wide", "across our"]
 
 CHUNK        = 8
 NEG          = ' -"senior" -"staff" -"principal" -"director" -"lead"'
@@ -101,19 +119,45 @@ def _chunks(lst, n):
 
 
 def _parse_years(text: str) -> tuple[str, str]:
-    """Return (years_raw, years_context). Surfaces the max year count found."""
-    best_n, best_ctx = None, ""
-    for m in YEARS_RE.finditer(text):
-        nums = [int(g) for g in m.groups() if g]
-        if not nums:
-            continue
-        n = max(nums)
-        if best_n is None or n > best_n:
-            best_n   = n
-            s        = max(0, m.start() - 35)
-            e        = min(len(text), m.end() + 35)
-            best_ctx = "…" + text[s:e].replace("\n", " ").strip() + "…"
-    return (str(best_n) if best_n is not None else "unknown", best_ctx)
+    """Return (years_raw, years_context).
+
+    Honest-by-design: collects every requirement-style year mention, drops
+    team/collective-tenure phrasing, and reports the MINIMUM bar found (the most
+    optimistic read, so you never self-reject). The context column shows every
+    matched phrase so you can catch the number if it's lying. No match → unknown.
+    """
+    candidates: list[int] = []
+    contexts:   list[str] = []
+    for pattern, mode in YEARS_PATTERNS:
+        for m in pattern.finditer(text):
+            span = m.group(0).lower()
+            if any(bad in span for bad in YEARS_DISQUALIFY):
+                continue
+            nums = [int(g) for g in m.groups() if g]
+            if not nums:
+                continue
+            value = nums[0] if mode == "low" else min(nums)
+            candidates.append(value)
+            s   = max(0, m.start() - 30)
+            e   = min(len(text), m.end() + 30)
+            ctx = "…" + text[s:e].replace("\n", " ").strip() + "…"
+            if ctx not in contexts:
+                contexts.append(ctx)
+
+    if not candidates:
+        return ("unknown", "")
+    return (str(min(candidates)), " | ".join(contexts[:3]))
+
+
+def _norm_url(url: str) -> str:
+    """Normalize a job URL for reliable dedupe: lowercase, force https, strip
+    query string / fragment / trailing slash. Defeats false misses from
+    ?gh_jid=, ?gh_src=, http vs https, and trailing-slash variants."""
+    u = (url or "").strip().lower()
+    if u.startswith("http://"):
+        u = "https://" + u[len("http://"):]
+    u = u.split("?", 1)[0].split("#", 1)[0]
+    return u.rstrip("/")
 
 
 def _loc_class(location: str, snippet: str) -> str:
@@ -153,15 +197,19 @@ def _passes_location(lc: str, remote_only: bool) -> bool:
     return lc in ("remote", "remote+nyc", "nyc", "unknown")
 
 
+def _ct_key(company: str, title: str) -> str:
+    return f"{company.strip().lower()}|{title.strip().lower()}"
+
+
 def _load_applied() -> set[str]:
     seen: set[str] = set()
     try:
         with open(APPLIED_FILE, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
                 if row.get("url"):
-                    seen.add(row["url"].strip().lower())
+                    seen.add(_norm_url(row["url"]))
                 if row.get("company") and row.get("title"):
-                    seen.add(f"{row['company'].strip().lower()}|{row['title'].strip().lower()}")
+                    seen.add(_ct_key(row["company"], row["title"]))
     except FileNotFoundError:
         pass
     return seen
@@ -170,8 +218,8 @@ def _load_applied() -> set[str]:
 def _deduped(jobs: list[dict], applied: set[str]) -> list[dict]:
     out = []
     for j in jobs:
-        if (j["url"].strip().lower() in applied or
-                f"{j['company'].strip().lower()}|{j['title'].strip().lower()}" in applied):
+        if (_norm_url(j["url"]) in applied or
+                _ct_key(j["company"], j["title"]) in applied):
             continue
         out.append(j)
     return out
