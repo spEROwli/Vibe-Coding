@@ -82,9 +82,12 @@ LEVER = [
 ]
 
 ATS_DOMAINS = {
-    "boards.greenhouse.io": "Greenhouse",
-    "jobs.lever.co":        "Lever",
-    "jobs.ashbyhq.com":     "Ashby",
+    "boards.greenhouse.io":     "Greenhouse",
+    "job-boards.greenhouse.io": "Greenhouse",
+    "jobs.lever.co":            "Lever",
+    "jobs.ashbyhq.com":         "Ashby",
+    "www.ycombinator.com":      "YC",
+    "ycombinator.com":          "YC",
 }
 
 # Requirement-style year patterns only. Deliberately NO bare "N years" pattern,
@@ -406,7 +409,12 @@ def cmd_process(path: str, remote_only: bool):
         lc = _loc_class("", snippet)
         if not _passes_location(lc, remote_only):
             continue
-        company       = urlparse(url).path.lstrip("/").split("/")[0]
+        parts = urlparse(url).path.lstrip("/").split("/")
+        # YC URLs: /companies/<slug>/jobs/...  — use index 1
+        if domain in ("www.ycombinator.com", "ycombinator.com") and len(parts) > 1:
+            company = parts[1]
+        else:
+            company = parts[0]
         years_raw, yc = _parse_years(snippet)
         hw = "YES" if any(kw in (title + " " + snippet).lower() for kw in HARDWARE_SIGNAL) else ""
         jobs.append({
