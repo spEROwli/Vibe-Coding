@@ -50,36 +50,53 @@ HARDWARE_SIGNAL = [
 ]
 
 # ── COMPANIES ─────────────────────────────────────────────────────────────────
-# Pure-software / fintech — competitive without PM experience
-GREENHOUSE = [
-    "betterment", "robinhood", "justworks", "mongodb", "datadog", "figma",
-    "stripe", "brex", "plaid", "affirm", "sofi", "gusto", "rippling",
-    "doubleverify", "pinterest", "carta", "hubspot", "webflow", "etsy",
-    "duolingo", "airtable", "benchling", "cockroachlabs", "coda",
-    "gemini", "navan", "whatnot", "modal", "replit",
-    # Healthtech / med-adjacent — your background is a differentiator here
-    "hingehealth", "springhealth", "headway", "cerebral", "lyra",
-    "ro", "twentyeight-health", "tempus", "color", "flatiron",
-    # Hardware-adjacent — engineering background valued
-    "peloton", "whoop", "oura", "brilliant", "verkada",
-]
-ASHBY = [
-    "notion", "harvey", "ramp", "cohere", "linear", "supabase", "mercury",
-    "vanta", "clay", "deel", "retool", "scale", "perplexity", "vercel",
-    "anyscale", "cursor", "glean", "watershed", "alchemy", "dbt-labs",
-    "openai", "anthropic", "arc", "prefect", "runway",
-    # Healthtech
-    "nuvation", "sword-health", "kry", "nirahealth", "zealthy",
-    "turquoise-health", "ribbon-health", "available",
-]
-LEVER = [
-    "airbnb", "shopify", "canva", "asana", "zendesk", "squarespace",
-    "intercom", "netlify", "sendbird", "postman", "contentful",
-    "amplitude", "mixpanel", "segment", "heap", "fullstory",
-    "pagerduty", "fastly", "cloudflare", "hashicorp",
-    # APM programs and hardware companies that use Lever
-    "nuro", "astrazeneca", "veracyte",
-]
+# Loaded from verified_companies.json if present; falls back to these defaults.
+# Run discover.py locally to grow the cache with YC-seeded companies.
+_CACHE_FILE = "verified_companies.json"
+
+def _load_companies() -> tuple[list, list, list]:
+    try:
+        import os
+        if os.path.exists(_CACHE_FILE):
+            data = json.loads(open(_CACHE_FILE).read())
+            gh  = [e["slug"] for e in data.get("greenhouse", []) if isinstance(e, dict)]
+            ash = [e["slug"] for e in data.get("ashby", [])       if isinstance(e, dict)]
+            lev = [e["slug"] for e in data.get("lever", [])       if isinstance(e, dict)]
+            if gh or ash or lev:
+                return gh, ash, lev
+    except Exception:
+        pass
+    # Hardcoded fallback — used when cache file is absent
+    return (
+        [   # Greenhouse
+            "betterment", "robinhood", "justworks", "mongodb", "datadog", "figma",
+            "stripe", "brex", "plaid", "affirm", "sofi", "gusto", "rippling",
+            "doubleverify", "pinterest", "carta", "hubspot", "webflow", "etsy",
+            "duolingo", "airtable", "benchling", "cockroachlabs", "coda",
+            "gemini", "navan", "whatnot", "modal", "replit",
+            "hingehealth", "springhealth", "headway", "cerebral", "lyra",
+            "ro", "twentyeight-health", "tempus", "color", "flatiron",
+            "peloton", "whoop", "oura", "brilliant", "verkada",
+            "mantrahealth", "alteradigitalhealth", "mavenclinic", "airbnb",
+        ],
+        [   # Ashby
+            "notion", "harvey", "ramp", "cohere", "linear", "supabase", "mercury",
+            "vanta", "clay", "deel", "retool", "scale-ai", "perplexity", "vercel",
+            "anyscale", "cursor", "glean", "watershed", "alchemy", "dbt-labs",
+            "openai", "anthropic", "arc", "prefect", "runway",
+            "nuvation", "sword-health", "nirahealth", "turquoise-health", "ribbon-health",
+            "oneapp", "airwallex", "pivotal-health", "plaid", "brigit",
+        ],
+        [   # Lever
+            "airbnb", "shopify", "canva", "asana", "zendesk", "squarespace",
+            "intercom", "netlify", "sendbird", "postman", "contentful",
+            "amplitude", "mixpanel", "pagerduty", "cloudflare", "hashicorp",
+            "nuro", "veracyte",
+            "tenna", "cents", "salvohealth", "mistral", "luni", "Flex",
+        ],
+    )
+
+GREENHOUSE, ASHBY, LEVER = _load_companies()
 
 ATS_DOMAINS = {
     "boards.greenhouse.io":     "Greenhouse",
