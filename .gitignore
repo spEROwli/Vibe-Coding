@@ -2,3 +2,5 @@ __pycache__/
 *.pyc
 pm_roles*.csv
 search_results.json
+hiringcafe_raw.json
+hiringcafe_roles.csv
