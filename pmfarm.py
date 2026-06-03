@@ -59,9 +59,19 @@ def _load_companies() -> tuple[list, list, list]:
         import os
         if os.path.exists(_CACHE_FILE):
             data = json.loads(open(_CACHE_FILE).read())
-            gh  = [e["slug"] for e in data.get("greenhouse", []) if isinstance(e, dict)]
-            ash = [e["slug"] for e in data.get("ashby", [])       if isinstance(e, dict)]
-            lev = [e["slug"] for e in data.get("lever", [])       if isinstance(e, dict)]
+            cand = data.get("candidates", {})
+            # Merge verified slugs with the wider candidate pool. Candidates are
+            # unconfirmed company guesses; a bad slug simply returns no jobs from
+            # the API (harmless), while good ones widen coverage for free.
+            def _merge(key):
+                seen, out = set(), []
+                for src in (data.get(key, []), cand.get(key, [])):
+                    for e in src:
+                        s = e["slug"] if isinstance(e, dict) else e
+                        if s and s not in seen:
+                            seen.add(s); out.append(s)
+                return out
+            gh, ash, lev = _merge("greenhouse"), _merge("ashby"), _merge("lever")
             if gh or ash or lev:
                 return gh, ash, lev
     except Exception:
@@ -213,12 +223,20 @@ def _days_old(date_str: str | None) -> str:
         return "unknown"
 
 
+# When True, the seniority gate is disabled so Senior/Staff/Principal/Lead PM
+# roles are kept too. Set via --all-levels for candidates with the experience to
+# clear higher bars who want maximum coverage.
+INCLUDE_SENIOR = False
+
+
 def _passes_title(title: str) -> bool:
     t = title.lower()
     if not any(kw in t for kw in TITLE_MUST_INCLUDE):
         return False
     if any(kw in t for kw in TITLE_EXCLUDE):
         return False
+    if INCLUDE_SENIOR:
+        return True
     # Check seniority only in the pre-comma segment: "Product Manager, Senior Care"
     # has "Senior" in the specialty area, not the level.  Real seniority markers
     # ("Senior Product Manager", "Lead PM") always precede the role noun.
@@ -497,7 +515,12 @@ def main():
     p.add_argument("file", nargs="?", help="WebSearch results JSON (process mode only)")
     p.add_argument("--remote-only", action="store_true",
                    help="Remote/US-wide roles only; drop NYC-specific listings")
+    p.add_argument("--all-levels", action="store_true",
+                   help="Keep Senior/Staff/Principal/Lead PM roles too (no seniority filter)")
     args = p.parse_args()
+
+    global INCLUDE_SENIOR
+    INCLUDE_SENIOR = args.all_levels
 
     if args.cmd == "queries":
         cmd_queries()

@@ -46,10 +46,20 @@ _OPENER = urllib.request.build_opener(_PostPreservingRedirect)
 
 # Reuse the exact filtering/dedupe logic from the primary pipeline so both
 # pipelines agree on what counts as an IC-level PM role in a viable location.
+import pmfarm
 from pmfarm import (
     _passes_title, _passes_location, _loc_class, _norm_url,
     _ct_key, _load_applied, _strip_html,
 )
+
+# Title variants to widen the net in --broad mode. Each is a separate API query;
+# results are merged and deduped. Covers IC through senior/leadership PM titles.
+BROAD_QUERIES = [
+    "product manager", "product owner", "technical product manager",
+    "senior product manager", "group product manager", "principal product manager",
+    "director of product", "platform product manager", "growth product manager",
+    "ai product manager",
+]
 
 API_JOBS  = "https://hiring.cafe/api/search-jobs"
 RAW_FILE  = "hiringcafe_raw.json"
@@ -181,7 +191,7 @@ def fetch_page(query: str, page: int, size: int = 100) -> list:
     return data if isinstance(data, list) else []
 
 
-def fetch_all(query: str, pages: int) -> list:
+def fetch_all(query: str, pages: int, save_raw: bool = True) -> list:
     all_jobs, raw = [], []
     for p in range(pages):
         try:
@@ -203,8 +213,9 @@ def fetch_all(query: str, pages: int) -> list:
         if len(batch) < 100:
             break
     # Save raw so every emitted row is auditable against this run's response.
-    with open(RAW_FILE, "w", encoding="utf-8") as f:
-        json.dump(raw, f, indent=2)
+    if save_raw:
+        with open(RAW_FILE, "w", encoding="utf-8") as f:
+            json.dump(raw, f, indent=2)
     return all_jobs
 
 
@@ -252,11 +263,16 @@ def dump_schema(query: str):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def run(query: str, pages: int, remote_only: bool):
-    print(f"Querying hiring.cafe for '{query}' ({pages} page(s) max)…")
-    jobs = fetch_all(query, pages)
+def run(queries: list, pages: int, remote_only: bool):
+    jobs = []
+    for q in queries:
+        print(f"Querying hiring.cafe for '{q}' ({pages} page(s) max)…")
+        jobs.extend(fetch_all(q, pages, save_raw=False))
+    # One combined raw file across all queries = complete audit trail.
+    with open(RAW_FILE, "w", encoding="utf-8") as f:
+        json.dump(jobs, f, indent=2)
     total = len(jobs)
-    print(f"\n{total} jobs returned by API")
+    print(f"\n{total} jobs returned by API across {len(queries)} query(ies)")
 
     rows = [extract(j) for j in jobs]
 
@@ -328,14 +344,23 @@ if __name__ == "__main__":
     ap.add_argument("--query", default="product manager")
     ap.add_argument("--pages", type=int, default=5)
     ap.add_argument("--remote-only", action="store_true")
+    ap.add_argument("--all-levels", action="store_true",
+                    help="Keep Senior/Staff/Principal/Lead PM roles too")
+    ap.add_argument("--broad", action="store_true",
+                    help="Run all PM title variants (widest net); implies --all-levels")
     ap.add_argument("--schema", action="store_true",
                     help="dump a sample job's raw fields and exit (verification)")
     ap.add_argument("--probe", action="store_true",
                     help="test endpoint/method variants and report which works")
     args = ap.parse_args()
+
+    # --broad casts the widest net, so it includes all seniority levels.
+    pmfarm.INCLUDE_SENIOR = args.all_levels or args.broad
+
     if args.probe:
         probe(args.query)
     elif args.schema:
         dump_schema(args.query)
     else:
-        run(args.query, args.pages, args.remote_only)
+        queries = BROAD_QUERIES if args.broad else [args.query]
+        run(queries, args.pages, args.remote_only)

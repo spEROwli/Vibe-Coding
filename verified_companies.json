@@ -123,5 +123,29 @@
     {"slug": "recurrency",          "name": "Recurrency",          "tags": ["saas","erp","remote"],          "yc_batch": "W19"},
     {"slug": "finley",              "name": "Finley",              "tags": ["fintech","capital-markets","nyc"], "yc_batch": "S21"},
     {"slug": "alex-com",            "name": "Alex",                "tags": ["ai","hiring","remote+nyc"],     "yc_batch": "W24"}
-  ]
+  ],
+  "candidates": {
+    "_note": "Unconfirmed slug guesses for breadth. The live API silently ignores any that don't resolve, so a wrong slug costs nothing. Promote verified hits into the sections above over time.",
+    "greenhouse": [
+      "dropbox", "reddit", "lyft", "doordash", "instacart", "samsara", "databricks",
+      "twilio", "discord", "zocdoc", "cedar", "oscar", "devoted", "cityblock", "hims",
+      "calm", "classpass", "warbyparker", "faire", "attentive", "gong", "grammarly",
+      "gitlab", "elastic", "confluent", "starburst", "dataiku", "flexport", "anduril",
+      "wayfair", "squarespace", "vimeo", "betterup", "handshake", "capsule",
+      "komodohealth", "includedhealth", "commure", "abridge", "wealthfront", "marqeta",
+      "nerdwallet", "chime", "octave", "spotify", "snyk", "1password", "current",
+      "stash", "alloy", "unit", "lithic", "moderntreasury", "transcarent", "ondeck"
+    ],
+    "ashby": [
+      "elevenlabs", "suno", "browserbase", "baseten", "together-ai", "cognition",
+      "decagon", "sierra", "hebbia", "legora", "abnormal", "wiz", "semgrep",
+      "chainguard", "replicate", "writer", "ironclad", "rho", "monarch", "pylon",
+      "graphite", "knock", "fal", "crusoe", "lambda", "fingerprint", "candid-health"
+    ],
+    "lever": [
+      "plaid", "spotify", "twitch", "thumbtack", "betterment", "matterport",
+      "wise", "chainalysis", "fireblocks", "ledger", "veeva", "guild",
+      "remote", "voltus", "carbonhealth", "cityblockhealth"
+    ]
+  }
 }
