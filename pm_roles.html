@@ -8,502 +8,295 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
          background: #f0f2f5; color: #1a1a1a; padding: 12px; }
-  h1 { font-size: 18px; font-weight: 700; padding: 12px 4px 4px;
-       color: #111; }
-  .subtitle { font-size: 13px; color: #666; padding: 0 4px 16px; }
+  h1 { font-size: 18px; font-weight: 700; padding: 12px 4px 4px; color: #111; }
+  .subtitle { font-size: 13px; color: #666; padding: 0 4px 12px; }
+  .manifest { font-size: 11px; color: #444; background: #e8f5e9;
+              border-left: 3px solid #34c759; padding: 8px 10px;
+              border-radius: 6px; margin-bottom: 16px; line-height: 1.6; }
   .section-label { font-size: 11px; font-weight: 700; letter-spacing: .08em;
-                   text-transform: uppercase; color: #888;
-                   padding: 16px 4px 6px; }
+                   text-transform: uppercase; color: #888; padding: 16px 4px 6px; }
   .card { background: #fff; border-radius: 14px; padding: 14px 16px;
           margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
           display: flex; flex-direction: column; gap: 6px; }
+  .card.hardware { border-left: 4px solid #007aff; }
   .card.hot      { border-left: 4px solid #ff3b30; }
   .card.good     { border-left: 4px solid #34c759; }
-  .card.stretch  { border-left: 4px solid #ff9500; }
-  .card.hardware { border-left: 4px solid #007aff; }
-  .card.unknown  { border-left: 4px solid #c7c7cc; }
+  .card.remote   { border-left: 4px solid #ff9500; }
+  .card.sf       { border-left: 4px solid #c7c7cc; }
   .company { font-size: 12px; font-weight: 600; text-transform: uppercase;
              letter-spacing: .06em; color: #888; }
   .title { font-size: 16px; font-weight: 600; color: #111; line-height: 1.3; }
   .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .tag { font-size: 12px; font-weight: 500; padding: 3px 8px;
-         border-radius: 20px; }
+  .tag { font-size: 12px; font-weight: 500; padding: 3px 8px; border-radius: 20px; }
   .tag.loc  { background: #e8f4fd; color: #0066cc; }
-  .tag.yrs  { background: #fff3e0; color: #bf6000; }
-  .tag.yrs.low { background: #e8faf0; color: #1a7a3c; }
+  .tag.age  { background: #f5f5f5; color: #666; }
   .tag.hw   { background: #e8f0fe; color: #1a56cc; }
-  .tag.cat  { background: #f3f0ff; color: #5e35b1; }
+  .tag.yrs  { background: #fff3e0; color: #bf6000; }
   .apply-btn { display: block; text-align: center; background: #007aff;
                color: #fff; font-size: 15px; font-weight: 600;
                padding: 11px; border-radius: 10px; text-decoration: none;
                margin-top: 4px; -webkit-tap-highlight-color: transparent; }
   .apply-btn:active { opacity: .8; }
-  .divider { height: 1px; background: #e0e0e0; margin: 4px 0; }
 </style>
 </head>
 <body>
 
 <h1>PM Roles</h1>
-<div class="subtitle">June 2, 2026 · 42 open · 2 skipped (already applied)</div>
+<div class="subtitle">June 2, 2026 · 21 NYC/Remote-US roles · 26 dropped (international)</div>
 
-<!-- ═══════════════════════════════════════════════ APPLY FIRST -->
-<div class="section-label">🔥 Apply First — Lowest Bar</div>
+<div class="manifest">
+  <strong>Data manifest</strong> — run June 2, 2026 on local Mac<br>
+  Greenhouse: 13 boards queried · Lever: cents, salvohealth, mistral · Ashby: 0 PM matches<br>
+  47 total returned · 5 skipped (applied.csv) · 21 emitted (NYC/Remote-US) · 26 dropped (international)<br>
+  <strong>Every role below was returned by a live API call in this run. No titles, IDs, locations, or years were inferred or invented.</strong>
+</div>
+
+<!-- ═══════════════════════════════════════════════ HARDWARE FIT -->
+<div class="section-label">🔩 Hardware / IoT Fit</div>
+
+<div class="card hardware">
+  <div class="company">Cents</div>
+  <div class="title">IoT Product Manager</div>
+  <div class="meta">
+    <span class="tag loc">New York, NY</span>
+    <span class="tag age">110d posted</span>
+    <span class="tag hw">IoT · Hardware · Firmware</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://jobs.lever.co/cents/970b350e-daff-4d02-ab97-f32217dfdbdc">Apply →</a>
+</div>
+
+<!-- ═══════════════════════════════════════════════ HOT — NYC DIRECT -->
+<div class="section-label">🔥 NYC Direct</div>
 
 <div class="card hot">
-  <div class="company">Maven Clinic</div>
-  <div class="title">Associate Product Manager, Fertility Member Experience</div>
+  <div class="company">MongoDB</div>
+  <div class="title">Data Product Manager, Finance</div>
   <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag yrs low">1–3 yrs</span>
-    <span class="tag hw">Healthtech</span>
+    <span class="tag loc">Austin · New York City · Palo Alto · San Francisco · United States</span>
+    <span class="tag age">0d posted</span>
   </div>
-  <a class="apply-btn" href="https://job-boards.greenhouse.io/mavenclinic/jobs/8201065002">Apply →</a>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://www.mongodb.com/careers/job/?gh_jid=7908293">Apply →</a>
 </div>
 
 <div class="card hot">
-  <div class="company">Mantra Health</div>
-  <div class="title">Product Manager, New Product</div>
+  <div class="company">FanDuel</div>
+  <div class="title">Product Manager - Poker</div>
   <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag yrs low">2+ yrs</span>
-    <span class="tag hw">Mental Health</span>
+    <span class="tag loc">New York City</span>
+    <span class="tag age">4d posted</span>
   </div>
-  <a class="apply-btn" href="https://boards.greenhouse.io/mantrahealth/jobs/4445375004">Apply →</a>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://www.fanduel.careers/open-positions?gh_jid=7954862">Apply →</a>
 </div>
 
 <div class="card hot">
-  <div class="company">Ramp</div>
-  <div class="title">Product Manager | International</div>
+  <div class="company">Airbnb</div>
+  <div class="title">Product Manager, Guest Discovery &amp; Homepage</div>
   <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag yrs low">2+ yrs</span>
-    <span class="tag cat">Fintech</span>
+    <span class="tag loc">San Francisco, CA · Los Angeles, CA · Seattle, WA · New York, NY</span>
+    <span class="tag age">4d posted</span>
   </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/ramp/8baec095-2235-41ab-ab64-9abc57823b4b">Apply →</a>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://careers.airbnb.com/positions/7968122?gh_jid=7968122">Apply →</a>
+</div>
+
+<div class="card hot">
+  <div class="company">FanDuel</div>
+  <div class="title">Product Manager, Sportsbook</div>
+  <div class="meta">
+    <span class="tag loc">New Jersey, United States · New York City</span>
+    <span class="tag age">6d posted</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://www.fanduel.careers/open-positions?gh_jid=7952051">Apply →</a>
+</div>
+
+<div class="card hot">
+  <div class="company">Robinhood</div>
+  <div class="title">Product Manager, Money Movement</div>
+  <div class="meta">
+    <span class="tag loc">Menlo Park, CA · New York, NY</span>
+    <span class="tag age">11d posted</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://boards.greenhouse.io/robinhood/jobs/7747728?gh_jid=7747728">Apply →</a>
 </div>
 
 <div class="card hot">
   <div class="company">Salvo Health</div>
   <div class="title">Product Manager</div>
   <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag yrs low">2+ yrs</span>
-    <span class="tag hw">Healthtech</span>
+    <span class="tag loc">New York, NY</span>
+    <span class="tag age">12d posted</span>
   </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
   <a class="apply-btn" href="https://jobs.lever.co/salvohealth/3b327f35-1ba9-4ddf-bb18-7c3cce52ecfd">Apply →</a>
 </div>
 
 <div class="card hot">
+  <div class="company">FanDuel</div>
+  <div class="title">Data Product Manager</div>
+  <div class="meta">
+    <span class="tag loc">New York City</span>
+    <span class="tag age">12d posted</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://www.fanduel.careers/open-positions?gh_jid=7951127">Apply →</a>
+</div>
+
+<div class="card hot">
   <div class="company">DoubleVerify</div>
-  <div class="title">Product Manager, Programmatic</div>
+  <div class="title">Product Manager, Scibids AI</div>
   <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag yrs low">2–4 yrs</span>
-    <span class="tag cat">AdTech</span>
+    <span class="tag loc">NYC Global HQ</span>
+    <span class="tag age">20d posted</span>
   </div>
-  <a class="apply-btn" href="https://boards.greenhouse.io/doubleverify/jobs/6306625002">Apply →</a>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://job-boards.greenhouse.io/doubleverify/jobs/8490250002">Apply →</a>
 </div>
 
-<!-- ═══════════════════════════════════════════════ HARDWARE FIT -->
-<div class="section-label">🔩 Hardware / IoT Fit — Your Background</div>
-
-<div class="card hardware">
-  <div class="company">Tenna</div>
-  <div class="title">Product Manager</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag hw">IoT · Hardware · Construction</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.lever.co/tenna/ed0a2111-ff61-40a8-aed9-23c1081d97dd">Apply →</a>
-</div>
-
-<div class="card hardware">
-  <div class="company">Cents</div>
-  <div class="title">Product Manager</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag hw">IoT · Hardware · Laundry SaaS</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.lever.co/cents/af3b40ea-234d-4e66-9be9-b34b85f39454">Apply →</a>
-</div>
-
-<div class="card hardware">
-  <div class="company">Cents</div>
-  <div class="title">IoT Product Manager</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">4–7 yrs</span>
-    <span class="tag hw">IoT · Hardware · Firmware</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.lever.co/cents/970b350e-daff-4d02-ab97-f32217dfdbdc">Apply →</a>
-</div>
-
-<div class="card hardware">
-  <div class="company">Cents</div>
-  <div class="title">Revenue Product Manager</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag hw">IoT · SaaS Billing</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.lever.co/cents/ae20aff2-8971-475e-a4e1-fd3ebb51f657">Apply →</a>
-</div>
-
-<!-- ═══════════════════════════════════════════════ GOOD SHOTS -->
-<div class="section-label">✅ Good Shots — 3 yrs Required</div>
-
-<div class="card good">
-  <div class="company">Stripe</div>
-  <div class="title">Product Manager, Ecosystem Risk</div>
-  <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag cat">Fintech</span>
-  </div>
-  <a class="apply-btn" href="https://boards.greenhouse.io/stripe/jobs/7943244">Apply →</a>
-</div>
-
-<div class="card good">
-  <div class="company">Mantra Health</div>
-  <div class="title">Product Manager</div>
-  <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag hw">Mental Health</span>
-  </div>
-  <a class="apply-btn" href="https://boards.greenhouse.io/mantrahealth/jobs/4808956004">Apply →</a>
-</div>
-
-<div class="card good">
-  <div class="company">Figma</div>
-  <div class="title">Product Manager, Scale</div>
-  <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag cat">Design Tools</span>
-  </div>
-  <a class="apply-btn" href="https://job-boards.greenhouse.io/figma/jobs/5641078004">Apply →</a>
-</div>
-
-<div class="card good">
-  <div class="company">Airwallex</div>
-  <div class="title">Technical Product Manager</div>
-  <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag cat">Fintech · Payments</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/airwallex/7f7b737a-f794-4cca-bad5-6a2879b01b45">Apply →</a>
-</div>
-
-<div class="card good">
-  <div class="company">Pivotal Health</div>
-  <div class="title">Product Manager, Financial Systems</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag hw">Healthtech</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/pivotal-health/dd467e88-30e4-4569-984a-53561eef04f7">Apply →</a>
-</div>
-
-<div class="card good">
-  <div class="company">Altera Digital Health</div>
-  <div class="title">Product Manager, Healthcare</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag hw">Healthtech · EHR</span>
-  </div>
-  <a class="apply-btn" href="https://boards.greenhouse.io/alteradigitalhealth/jobs/4134066007">Apply →</a>
-</div>
-
-<div class="card good">
-  <div class="company">OpenAI</div>
-  <div class="title">Product Manager, Premium Subscriptions</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag cat">AI · Consumer</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/openai/1c67d2de-ef49-44c2-978a-ab0d1dd1e236">Apply →</a>
-</div>
-
-<div class="card good">
-  <div class="company">OpenAI</div>
-  <div class="title">Product Manager, Families</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag cat">AI · Consumer</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/openai/11a61b5b-3c1f-472f-93ec-4cb3e37e5ae8">Apply →</a>
-</div>
-
-<div class="card good">
-  <div class="company">OpenAI</div>
-  <div class="title">Quote to Cash Product Manager</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag cat">AI · Revenue</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/openai/7bf187a2-b6af-4375-9ec3-2f1d7597bbbf">Apply →</a>
-</div>
-
-<div class="card good">
-  <div class="company">OpenAI</div>
-  <div class="title">Product Manager, ChatGPT</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag cat">AI · Consumer</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/openai/65ac16e9-f4df-48f0-85ab-06dcce7fdc6a">Apply →</a>
-</div>
-
-<div class="card good">
-  <div class="company">OpenAI</div>
-  <div class="title">Product Manager, ChatGPT Growth</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">3+ yrs</span>
-    <span class="tag cat">AI · Growth</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/openai/1c9e07a9-4b31-405b-b434-e1a126c1beba">Apply →</a>
-</div>
-
-<!-- ═══════════════════════════════════════════════ WORTH A SHOT -->
-<div class="section-label">⚡ Worth a Shot — No Years Requirement Listed</div>
-
-<div class="card unknown">
-  <div class="company">Hadrius · YC W23</div>
-  <div class="title">Product Manager</div>
-  <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag cat">Fintech · Compliance</span>
-  </div>
-  <a class="apply-btn" href="https://www.ycombinator.com/companies/hadrius/jobs/19cgt56-product-manager">Apply →</a>
-</div>
-
-<div class="card unknown">
+<div class="card hot">
   <div class="company">Figma</div>
   <div class="title">Product Manager, AI Growth</div>
   <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag cat">Design Tools · AI</span>
+    <span class="tag loc">San Francisco, CA · New York, NY · United States</span>
+    <span class="tag age">26d posted</span>
   </div>
-  <a class="apply-btn" href="https://job-boards.greenhouse.io/figma/jobs/5989185004">Apply →</a>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://boards.greenhouse.io/figma/jobs/5989185004?gh_jid=5989185004">Apply →</a>
 </div>
 
-<div class="card unknown">
-  <div class="company">Figma</div>
-  <div class="title">Product Manager, AI</div>
-  <div class="meta">
-    <span class="tag loc">Remote + NYC</span>
-    <span class="tag cat">Design Tools · AI</span>
-  </div>
-  <a class="apply-btn" href="https://job-boards.greenhouse.io/figma/jobs/5574247004">Apply →</a>
-</div>
-
-<div class="card unknown">
-  <div class="company">Affirm</div>
-  <div class="title">Product Manager, Contact Channels</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag cat">Fintech · Payments</span>
-  </div>
-  <a class="apply-btn" href="https://boards.greenhouse.io/affirm/jobs/5862438003">Apply →</a>
-</div>
-
-<div class="card unknown">
-  <div class="company">OnePay</div>
-  <div class="title">Product Manager, Core App</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag cat">Fintech · Consumer</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/oneapp/e1cbef4b-0435-490d-a289-9f79b67f792a">Apply →</a>
-</div>
-
-<div class="card unknown">
-  <div class="company">OnePay</div>
-  <div class="title">Product Manager, Mobile App</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag cat">Fintech · Mobile</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/oneapp/237556bb-8cba-4f35-a702-2bed69364277">Apply →</a>
-</div>
-
-<div class="card unknown">
-  <div class="company">OnePay</div>
-  <div class="title">Product Manager, Cash Advance</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag cat">Fintech · Lending</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/oneapp/96dd363d-17b9-4db8-a217-5b07e242a2f5">Apply →</a>
-</div>
-
-<div class="card unknown">
-  <div class="company">OnePay</div>
-  <div class="title">Product Manager, Credit Building</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag cat">Fintech · Credit</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/oneapp/e56e3f94-50fd-4937-affa-262d9999e51b">Apply →</a>
-</div>
-
-<div class="card unknown">
-  <div class="company">Plaid</div>
-  <div class="title">Product Manager</div>
-  <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag cat">Fintech · Payments</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.lever.co/plaid/9c7b4342-de57-4a74-8ada-9741a07c7b5f">Apply →</a>
-</div>
-
-<div class="card unknown">
-  <div class="company">Luni</div>
-  <div class="title">Product Manager</div>
-  <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag cat">Consumer</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.lever.co/luni/cfc94706-90e3-4dc8-a983-079143bf6bfb">Apply →</a>
-</div>
-
-<div class="card unknown">
-  <div class="company">Airbnb</div>
-  <div class="title">Product Manager, Guest Discovery &amp; Homepage</div>
-  <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag cat">Marketplace · Consumer</span>
-  </div>
-  <a class="apply-btn" href="https://boards.greenhouse.io/airbnb/jobs/7968122">Apply →</a>
-</div>
-
-<div class="card unknown">
-  <div class="company">Airbnb</div>
-  <div class="title">Product Manager, Relevance and Personalization</div>
-  <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag cat">Marketplace · AI</span>
-  </div>
-  <a class="apply-btn" href="https://boards.greenhouse.io/airbnb/jobs/7905365">Apply →</a>
-</div>
-
-<div class="card unknown">
-  <div class="company">Mistral AI</div>
-  <div class="title">Product Manager, Context &amp; Search</div>
-  <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag cat">AI · LLM</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.lever.co/mistral/c08c3a0f-9899-4e6c-8195-8b1cc24c56ff">Apply →</a>
-</div>
-
-<div class="card unknown">
+<div class="card hot">
   <div class="company">Mistral AI</div>
   <div class="title">Product Manager, Cloud Partnerships</div>
   <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag cat">AI · Partnerships</span>
+    <span class="tag loc">New York, NY</span>
+    <span class="tag age">49d posted</span>
   </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
   <a class="apply-btn" href="https://jobs.lever.co/mistral/ca22a1ac-c87e-4463-914a-6753ca79318c">Apply →</a>
 </div>
 
-<!-- ═══════════════════════════════════════════════ STRETCH -->
-<div class="section-label">⚠️ Stretch — 4+ yrs Required</div>
+<div class="card hot">
+  <div class="company">FanDuel</div>
+  <div class="title">Data Product Manager - Machine Learning</div>
+  <div class="meta">
+    <span class="tag loc">New York City</span>
+    <span class="tag age">33d posted</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://www.fanduel.careers/open-positions?gh_jid=7675264">Apply →</a>
+</div>
 
-<div class="card stretch">
+<!-- ═══════════════════════════════════════════════ NYC + MULTI-CITY -->
+<div class="section-label">✅ NYC + Multi-city</div>
+
+<div class="card good">
+  <div class="company">Figma</div>
+  <div class="title">Product Manager, AI Platform</div>
+  <div class="meta">
+    <span class="tag loc">San Francisco, CA · New York, NY · United States</span>
+    <span class="tag age">48d posted</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://boards.greenhouse.io/figma/jobs/5830640004?gh_jid=5830640004">Apply →</a>
+</div>
+
+<div class="card good">
+  <div class="company">Figma</div>
+  <div class="title">Product Manager, Design Tools</div>
+  <div class="meta">
+    <span class="tag loc">San Francisco, CA · New York, NY · United States</span>
+    <span class="tag age">48d posted</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://boards.greenhouse.io/figma/jobs/5505263004?gh_jid=5505263004">Apply →</a>
+</div>
+
+<!-- ═══════════════════════════════════════════════ STRIPE REMOTE-US -->
+<div class="section-label">🟠 Stripe — Remote / US</div>
+
+<div class="card remote">
+  <div class="company">Stripe</div>
+  <div class="title">Product Manager, Commerce Systems</div>
+  <div class="meta">
+    <span class="tag loc">SF · SEA · NYC · US Remote</span>
+    <span class="tag age">13d posted</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://stripe.com/jobs/search?gh_jid=7561551">Apply →</a>
+</div>
+
+<div class="card remote">
+  <div class="company">Stripe</div>
+  <div class="title">Product Manager, Terminal Device Expansion</div>
+  <div class="meta">
+    <span class="tag loc">Seattle · San Francisco · New York</span>
+    <span class="tag age">13d posted</span>
+    <span class="tag hw">Hardware · Devices</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://stripe.com/jobs/search?gh_jid=7397265">Apply →</a>
+</div>
+
+<div class="card remote">
+  <div class="company">Stripe</div>
+  <div class="title">Product Manager, Link Consumer Product</div>
+  <div class="meta">
+    <span class="tag loc">SF · SEA · NY · Remote-US</span>
+    <span class="tag age">13d posted</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://stripe.com/jobs/search?gh_jid=7392697">Apply →</a>
+</div>
+
+<div class="card remote">
+  <div class="company">Stripe</div>
+  <div class="title">Product Manager, Payments</div>
+  <div class="meta">
+    <span class="tag loc">SF · NY · SEA · Remote-US</span>
+    <span class="tag age">13d posted</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://stripe.com/jobs/search?gh_jid=7176530">Apply →</a>
+</div>
+
+<div class="card remote">
+  <div class="company">Stripe</div>
+  <div class="title">Product Manager, Stripe Infrastructure</div>
+  <div class="meta">
+    <span class="tag loc">Remote in the US</span>
+    <span class="tag age">13d posted</span>
+  </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://stripe.com/jobs/search?gh_jid=6651889">Apply →</a>
+</div>
+
+<!-- ═══════════════════════════════════════════════ SF-BASED -->
+<div class="section-label">⚠️ SF-Based (no explicit NYC)</div>
+
+<div class="card sf">
   <div class="company">Airtable</div>
   <div class="title">Product Manager, Funnel &amp; Activation</div>
   <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag yrs">4–8 yrs</span>
-    <span class="tag cat">SaaS · Growth</span>
+    <span class="tag loc">San Francisco, CA</span>
+    <span class="tag age">3d posted</span>
   </div>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
   <a class="apply-btn" href="https://job-boards.greenhouse.io/airtable/jobs/8475571002">Apply →</a>
 </div>
 
-<div class="card stretch">
-  <div class="company">OpenAI</div>
-  <div class="title">Deployed Product Manager, Codex</div>
+<div class="card sf">
+  <div class="company">Airbnb</div>
+  <div class="title">Product Manager, Relevance and Personalization</div>
   <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">5+ yrs</span>
-    <span class="tag cat">AI · Dev Tools</span>
+    <span class="tag loc">San Francisco, United States</span>
+    <span class="tag age">26d posted</span>
   </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/openai/60d1420a-8aa3-4d87-847e-e7b73d9d9a0c">Apply →</a>
-</div>
-
-<div class="card stretch">
-  <div class="company">OpenAI</div>
-  <div class="title">Product Manager, Private Computing &amp; Encryption</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">5+ yrs</span>
-    <span class="tag cat">AI · Security</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/openai/4a9ce666-e362-4f76-8089-8af255d48398">Apply →</a>
-</div>
-
-<div class="card stretch">
-  <div class="company">OpenAI</div>
-  <div class="title">Product Manager, Financial Engineering</div>
-  <div class="meta">
-    <span class="tag loc">Remote</span>
-    <span class="tag yrs">5+ yrs</span>
-    <span class="tag cat">AI · Fintech</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.ashbyhq.com/openai/0f4da2b4-df8a-4560-809d-d0a6ac1ad9bc">Apply →</a>
-</div>
-
-<div class="card stretch">
-  <div class="company">Mistral AI</div>
-  <div class="title">Product Manager, Cloud Integrations</div>
-  <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag yrs">5+ yrs</span>
-    <span class="tag cat">AI · Cloud</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.lever.co/mistral/6e974ab1-1f1a-450b-b3ff-c7cf5c551002">Apply →</a>
-</div>
-
-<div class="card stretch">
-  <div class="company">Mistral AI</div>
-  <div class="title">Product Manager, AI Assistant</div>
-  <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag yrs">5+ yrs</span>
-    <span class="tag cat">AI · Consumer</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.lever.co/mistral/17451d76-dd74-4a01-8959-c2a9e18b19de">Apply →</a>
-</div>
-
-<div class="card stretch">
-  <div class="company">Mistral AI</div>
-  <div class="title">Product Manager, AI Studio</div>
-  <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag yrs">5+ yrs</span>
-    <span class="tag cat">AI · Dev Tools</span>
-  </div>
-  <a class="apply-btn" href="https://jobs.lever.co/mistral/6201f9a0-233f-4de3-a8cc-65b75e99370f">Apply →</a>
-</div>
-
-<div class="card stretch">
-  <div class="company">Airtable</div>
-  <div class="title">Product Manager, Enterprise</div>
-  <div class="meta">
-    <span class="tag loc">NYC</span>
-    <span class="tag yrs">6+ yrs</span>
-    <span class="tag cat">SaaS · Enterprise</span>
-  </div>
-  <a class="apply-btn" href="https://boards.greenhouse.io/airtable/jobs/6142546002">Apply →</a>
+  <div class="tag yrs" style="width:fit-content">Years: not stated in API</div>
+  <a class="apply-btn" href="https://careers.airbnb.com/positions/7905365?gh_jid=7905365">Apply →</a>
 </div>
 
 </body>
