@@ -222,30 +222,36 @@ def fetch_all(query: str, pages: int, save_raw: bool = True) -> list:
 # ── schema probe (verification aid) ───────────────────────────────────────────
 
 def probe(query: str):
-    """Try endpoint/method variants and report each result, so one local run
-    tells us definitively which combination hiring.cafe accepts today."""
+    """Try endpoint/method variants and report each result + the server's `Allow`
+    header (which on a 405 names exactly which methods the route accepts). One
+    local run tells us definitively what hiring.cafe wants today."""
     body = json.dumps({"size": 1, "page": 0, "searchState": _search_state(query)}).encode()
-    variants = [
-        ("POST", "https://hiring.cafe/api/search-jobs",  True),   # redirect-preserving
-        ("POST", "https://hiring.cafe/api/search-jobs/", True),
-        ("POST", "https://hiring.cafe/api/search-jobs",  False),  # naive urllib (downgrades)
-        ("GET",  "https://hiring.cafe/api/search-jobs",  False),
+    endpoints = [
+        "https://hiring.cafe/api/search-jobs",
+        "https://hiring.cafe/api/search-jobs/",
+        "https://hiring.cafe/api/search-jobs/get-total-count",
+        "https://hiring.cafe/api/jobs",
+        "https://hiring.cafe/api/search",
     ]
-    for method, url, preserve in variants:
-        opener = _OPENER if preserve else urllib.request.build_opener()
-        data   = body if method == "POST" else None
-        req    = urllib.request.Request(url, data=data, headers=HEADERS, method=method)
-        tag    = f"{method:4s} {url}{'  [keep-POST]' if preserve else ''}"
-        try:
-            with opener.open(req, timeout=20) as r:
-                payload = r.read(400)
-                print(f"  OK   {r.status}  {tag}")
-                print(f"        first 200 bytes: {payload[:200]!r}")
-        except HTTPError as e:
-            print(f"  FAIL {e.code}  {tag}  ({e.reason})")
-        except URLError as e:
-            print(f"  ERR        {tag}  ({e.reason})")
-    print("\nUse the first 'OK 200' variant — its method/URL is the one to keep.")
+    methods = ["POST", "GET"]
+    for url in endpoints:
+        for method in methods:
+            data = body if method == "POST" else None
+            req  = urllib.request.Request(url, data=data, headers=HEADERS, method=method)
+            tag  = f"{method:4s} {url}"
+            try:
+                with _OPENER.open(req, timeout=20) as r:
+                    payload = r.read(300)
+                    print(f"  OK   {r.status}  {tag}")
+                    print(f"        body: {payload[:200]!r}")
+            except HTTPError as e:
+                allow = e.headers.get("Allow") or e.headers.get("allow") or "—"
+                server = e.headers.get("Server") or "—"
+                print(f"  FAIL {e.code}  {tag}   Allow={allow}  Server={server}")
+            except URLError as e:
+                print(f"  ERR        {tag}  ({e.reason})")
+    print("\nRead the 'Allow=' on any 405 — those are the methods that route accepts.")
+    print("Use the first 'OK 200' line: its method + URL is what to wire in.")
 
 
 def dump_schema(query: str):
@@ -311,7 +317,7 @@ def run(queries: list, pages: int, remote_only: bool):
     print("\n" + "─" * 74)
     print("HIRING CAFÉ PIPELINE — MANIFEST")
     print(f"  run:            {datetime.datetime.now().isoformat(timespec='seconds')}")
-    print(f"  query:          {query!r}   remote_only={remote_only}")
+    print(f"  queries:        {queries}   remote_only={remote_only}")
     print(f"  API returned:   {total}")
     print(f"  dropped blank:  {dropped_blank} (no title or no apply url)")
     print(f"  dropped title:  {dropped_title} (not IC-level PM)")
