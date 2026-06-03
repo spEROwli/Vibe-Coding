@@ -188,6 +188,17 @@ def _parse_years(text: str) -> tuple[str, str]:
     return (str(min(candidates)), " | ".join(contexts[:3]))
 
 
+def _years_sentence(text: str) -> str:
+    """Return the first verbatim sentence containing 'year(s)' from the JD content,
+    else 'not stated'. SCRAPER_RULES: the years field must be the exact JD sentence,
+    never a bucket or a derived number. Run on FULL content, not a truncation."""
+    t = re.sub(r"\s+", " ", text or "").strip()
+    for sentence in re.split(r"(?<=[.!?])\s+", t):
+        if re.search(r"\byears?\b", sentence, re.I):
+            return sentence.strip()[:300]
+    return "not stated"
+
+
 def _norm_url(url: str) -> str:
     """Normalize a job URL for reliable dedupe: lowercase, force https, strip
     query string / fragment / trailing slash. Defeats false misses from
@@ -280,21 +291,25 @@ def _deduped(jobs: list[dict], applied: set[str]) -> list[dict]:
     return out
 
 
-def _make_job(source, company, title, location, url, snippet, date_str) -> dict:
+def _make_job(source, company, title, location, url, snippet, date_str,
+              full_content=None) -> dict:
     lc            = _loc_class(location, snippet)
     years_raw, yc = _parse_years(snippet)
+    # Verbatim sentence comes from FULL content so it isn't lost to truncation.
+    years_sentence = _years_sentence(full_content if full_content is not None else snippet)
     return {
-        "source":        source,
-        "company":       company,
-        "title":         title,
-        "location":      location,
-        "loc_class":     lc,
-        "url":           url,
-        "days_old":      _days_old(date_str),
-        "years_raw":     years_raw,
-        "years_context": yc,
-        "hw_signal":     "YES" if any(kw in (title + " " + snippet).lower() for kw in HARDWARE_SIGNAL) else "",
-        "applied":       "",
+        "source":         source,
+        "company":        company,
+        "title":          title,
+        "location":       location,
+        "loc_class":      lc,
+        "url":            url,
+        "days_old":       _days_old(date_str),
+        "years_raw":      years_raw,
+        "years_context":  yc,
+        "years_sentence": years_sentence,
+        "hw_signal":      "YES" if any(kw in (title + " " + snippet).lower() for kw in HARDWARE_SIGNAL) else "",
+        "applied":        "",
     }
 
 
@@ -324,7 +339,7 @@ def fetch_greenhouse(slug: str) -> list[dict]:
         out.append(_make_job(
             "Greenhouse", slug, title, location,
             j.get("absolute_url", ""), content[:500],
-            j.get("updated_at"),
+            j.get("updated_at"), full_content=content,
         ))
     return out
 
@@ -345,6 +360,7 @@ def fetch_ashby(slug: str) -> list[dict]:
             "Ashby", slug, title, location,
             j.get("jobUrl", "") or j.get("applyUrl", ""), content[:500],
             None,   # Ashby does not reliably expose a post date
+            full_content=content,
         ))
     return out
 
@@ -367,7 +383,7 @@ def fetch_lever(slug: str) -> list[dict]:
         out.append(_make_job(
             "Lever", slug, title, location,
             j.get("hostedUrl", ""), content[:500],
-            date_str,
+            date_str, full_content=content,
         ))
     return out
 
@@ -402,7 +418,8 @@ def _output(jobs: list[dict], skipped: int = 0):
         print(f"(skipped {skipped} already-applied role(s) from {APPLIED_FILE})\n")
 
     fields = ["source", "company", "title", "location", "loc_class",
-              "url", "days_old", "years_raw", "years_context", "hw_signal", "applied"]
+              "url", "days_old", "years_raw", "years_context", "years_sentence",
+              "hw_signal", "applied"]
     with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
         csv.DictWriter(f, fieldnames=fields).writeheader()
         csv.DictWriter(f, fieldnames=fields).writerows(jobs)
