@@ -28,6 +28,22 @@ Cloudflare and 403s any datacenter IP.
 import argparse, csv, json, sys, urllib.request
 from urllib.error import HTTPError, URLError
 
+
+class _PostPreservingRedirect(urllib.request.HTTPRedirectHandler):
+    """urllib's default handler downgrades POST→GET on 301/302/303 redirects.
+    hiring.cafe redirects /api/search-jobs (e.g. to add a trailing slash); the
+    downgraded GET then hits a POST-only route and returns 405. This re-issues
+    the redirect as POST with the original body intact."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return urllib.request.Request(
+            newurl, data=req.data,
+            headers=dict(req.header_items()),
+            method="POST", origin_req_host=req.origin_req_host,
+            unverifiable=True)
+
+
+_OPENER = urllib.request.build_opener(_PostPreservingRedirect)
+
 # Reuse the exact filtering/dedupe logic from the primary pipeline so both
 # pipelines agree on what counts as an IC-level PM role in a viable location.
 from pmfarm import (
@@ -137,12 +153,24 @@ def _search_state(query: str) -> dict:
     }
 
 
+def _post(url: str, body: bytes):
+    """POST that survives redirects without method downgrade. Falls back to the
+    trailing-slash variant on a 405 (the classic redirect-downgrade signature)."""
+    req = urllib.request.Request(url, data=body, headers=HEADERS, method="POST")
+    try:
+        return _OPENER.open(req, timeout=20)
+    except HTTPError as e:
+        if e.code == 405 and not url.endswith("/"):
+            req2 = urllib.request.Request(url + "/", data=body, headers=HEADERS, method="POST")
+            return _OPENER.open(req2, timeout=20)
+        raise
+
+
 def fetch_page(query: str, page: int, size: int = 100) -> list:
     body = json.dumps({
         "size": size, "page": page, "searchState": _search_state(query),
     }).encode()
-    req = urllib.request.Request(API_JOBS, data=body, headers=HEADERS, method="POST")
-    with urllib.request.urlopen(req, timeout=20) as r:
+    with _post(API_JOBS, body) as r:
         data = json.loads(r.read())
     # Response shape isn't documented; jobs live under one of these keys.
     for key in ("results", "jobs", "data", "items", "content"):
@@ -181,6 +209,33 @@ def fetch_all(query: str, pages: int) -> list:
 
 
 # ── schema probe (verification aid) ───────────────────────────────────────────
+
+def probe(query: str):
+    """Try endpoint/method variants and report each result, so one local run
+    tells us definitively which combination hiring.cafe accepts today."""
+    body = json.dumps({"size": 1, "page": 0, "searchState": _search_state(query)}).encode()
+    variants = [
+        ("POST", "https://hiring.cafe/api/search-jobs",  True),   # redirect-preserving
+        ("POST", "https://hiring.cafe/api/search-jobs/", True),
+        ("POST", "https://hiring.cafe/api/search-jobs",  False),  # naive urllib (downgrades)
+        ("GET",  "https://hiring.cafe/api/search-jobs",  False),
+    ]
+    for method, url, preserve in variants:
+        opener = _OPENER if preserve else urllib.request.build_opener()
+        data   = body if method == "POST" else None
+        req    = urllib.request.Request(url, data=data, headers=HEADERS, method=method)
+        tag    = f"{method:4s} {url}{'  [keep-POST]' if preserve else ''}"
+        try:
+            with opener.open(req, timeout=20) as r:
+                payload = r.read(400)
+                print(f"  OK   {r.status}  {tag}")
+                print(f"        first 200 bytes: {payload[:200]!r}")
+        except HTTPError as e:
+            print(f"  FAIL {e.code}  {tag}  ({e.reason})")
+        except URLError as e:
+            print(f"  ERR        {tag}  ({e.reason})")
+    print("\nUse the first 'OK 200' variant — its method/URL is the one to keep.")
+
 
 def dump_schema(query: str):
     jobs = fetch_all(query, 1)
@@ -275,8 +330,12 @@ if __name__ == "__main__":
     ap.add_argument("--remote-only", action="store_true")
     ap.add_argument("--schema", action="store_true",
                     help="dump a sample job's raw fields and exit (verification)")
+    ap.add_argument("--probe", action="store_true",
+                    help="test endpoint/method variants and report which works")
     args = ap.parse_args()
-    if args.schema:
+    if args.probe:
+        probe(args.query)
+    elif args.schema:
         dump_schema(args.query)
     else:
         run(args.query, args.pages, args.remote_only)
