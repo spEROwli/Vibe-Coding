@@ -64,11 +64,27 @@ def _years_num(years_raw: str):
         return None  # "unknown" / blank → treat as not stated
 
 
+# Phrases that turn a stated years number into a soft preference, not a hard
+# floor. Read verbatim from the JD sentence — not inferred. A role with ">3 yrs"
+# but a hedge belongs in the open pile; the sentence on the card lets you decide.
+_HEDGE = ("preferred", "or equivalent", "equivalent experience", "equivalent work",
+          "nice to have", "ideally", "a plus", "bonus", "not required",
+          "not strictly", "we welcome", "we encourage")
+
+
+def _years_is_soft(row: dict) -> bool:
+    s = (row.get("years_sentence") or "").lower()
+    return any(h in s for h in _HEDGE)
+
+
 def _in_range(row: dict) -> bool:
     if _is_senior(row.get("title", "")):
         return False
     n = _years_num(row.get("years_raw", ""))
-    return n is None or n <= 3
+    if n is None or n <= 3:
+        return True
+    # >3 yrs stated: keep it in range only if the JD hedges the number.
+    return _years_is_soft(row)
 
 
 def _is_priority(row: dict) -> bool:
