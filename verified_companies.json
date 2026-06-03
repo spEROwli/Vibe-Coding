@@ -1,7 +1,7 @@
 {
   "_meta": {
     "description": "Verified ATS slug cache. Each entry has a confirmed job board URL. Used by pmfarm.py and discover.py to avoid slug-guessing on every run.",
-    "last_updated": "2026-06-02",
+    "last_updated": "2026-06-03",
     "total": 95
   },
   "greenhouse": [
@@ -134,18 +134,25 @@
       "wayfair", "squarespace", "vimeo", "betterup", "handshake", "capsule",
       "komodohealth", "includedhealth", "commure", "abridge", "wealthfront", "marqeta",
       "nerdwallet", "chime", "octave", "spotify", "snyk", "1password", "current",
-      "stash", "alloy", "unit", "lithic", "moderntreasury", "transcarent", "ondeck"
+      "stash", "alloy", "unit", "lithic", "moderntreasury", "transcarent", "ondeck",
+      "braze", "yext", "noom", "lemonade", "olo", "gopuff", "clearme", "helloalma",
+      "butterfly-network", "sprinklr", "bowery", "dandelion", "vizai", "socure",
+      "lattice", "brightline", "talkiatry", "formenergy", "foursquare",
+      "guardant", "natera", "recursion", "curology", "parsleyhealth", "oshi"
     ],
     "ashby": [
       "elevenlabs", "suno", "browserbase", "baseten", "together-ai", "cognition",
       "decagon", "sierra", "hebbia", "legora", "abnormal", "wiz", "semgrep",
       "chainguard", "replicate", "writer", "ironclad", "rho", "monarch", "pylon",
-      "graphite", "knock", "fal", "crusoe", "lambda", "fingerprint", "candid-health"
+      "graphite", "knock", "fal", "crusoe", "lambda", "fingerprint", "candid-health",
+      "hex", "descript", "vapi", "hightouch", "census", "gather",
+      "superhuman", "dovetail", "maze", "coda-hq", "luma", "causal"
     ],
     "lever": [
       "plaid", "spotify", "twitch", "thumbtack", "betterment", "matterport",
       "wise", "chainalysis", "fireblocks", "ledger", "veeva", "guild",
-      "remote", "voltus", "carbonhealth", "cityblockhealth"
+      "remote", "voltus", "carbonhealth", "cityblockhealth",
+      "toast", "clio", "podium", "heap", "fullstory", "contentsquare"
     ]
   }
 }
