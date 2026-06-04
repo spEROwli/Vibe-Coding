@@ -323,7 +323,7 @@ def _deduped(jobs: list[dict], applied: set[str]) -> list[dict]:
 def _make_job(source, company, title, location, url, snippet, date_str,
               full_content=None) -> dict:
     lc            = _loc_class(location, snippet)
-    years_raw, yc = _parse_years(snippet)
+    years_raw, yc = _parse_years(full_content if full_content is not None else snippet)
     # Verbatim sentence comes from FULL content so it isn't lost to truncation.
     years_sentence = _years_sentence(full_content if full_content is not None else snippet)
     return {
