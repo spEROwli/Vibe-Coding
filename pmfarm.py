@@ -258,10 +258,21 @@ def _passes_title(title: str) -> bool:
     return not _SENIORITY_RE.search(main)
 
 
-def _passes_location(lc: str, remote_only: bool) -> bool:
+def _passes_location(lc: str, remote_only: bool, include_unknown: bool = False) -> bool:
+    """Determine whether a role's loc_class passes the geo filter.
+
+    Default (no flags): only remote, remote+nyc, nyc pass. unknown is excluded
+    because an unclassified location is not a confirmed NYC/remote match — it is
+    a data gap that can silently include SF-only or international roles.
+    Use --include-unknown-loc to opt in to unknown-location roles.
+    """
     if remote_only:
-        return lc in ("remote", "remote+nyc", "unknown")
-    return lc in ("remote", "remote+nyc", "nyc", "unknown")
+        allowed = {"remote", "remote+nyc"}
+    else:
+        allowed = {"remote", "remote+nyc", "nyc"}
+    if include_unknown:
+        allowed.add("unknown")
+    return lc in allowed
 
 
 def _ct_key(company: str, title: str) -> str:
@@ -525,7 +536,7 @@ def cmd_process(path: str, remote_only: bool):
 
 # ── local mode ────────────────────────────────────────────────────────────────
 
-def cmd_local(remote_only: bool):
+def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
     # ── Gmail company-level dedupe (primary source of truth) ──────────────────
     gmail_set, gmail_evidence = _gmail_applied_set()
     print(f"\nGmail applied set: {len(gmail_set)} companies")
@@ -553,8 +564,11 @@ def cmd_local(remote_only: bool):
             except Exception as e:
                 print(f"  {fn_name}({slug}) error: {e}", file=sys.stderr)
 
-    # ── location filter ───────────────────────────────────────────────────────
-    filtered = [j for j in raw if _passes_location(j["loc_class"], remote_only)]
+    # ── location filter (unknown excluded by default — P2) ───────────────────
+    unknown_count = sum(1 for j in raw if j["loc_class"] == "unknown")
+    filtered = [j for j in raw if _passes_location(j["loc_class"], remote_only, include_unknown_loc)]
+    excluded_unknown = sum(1 for j in raw if j["loc_class"] == "unknown"
+                          and not _passes_location("unknown", remote_only, include_unknown_loc))
 
     # ── applied.csv URL/name dedupe (fallback, manual) ────────────────────────
     applied = _load_applied()
@@ -586,10 +600,15 @@ def cmd_local(remote_only: bool):
         if len(gmail_skipped) > 10:
             print(f"  … and {len(gmail_skipped) - 10} more")
 
+    nyc_count     = sum(1 for j in filtered if j["loc_class"] == "nyc")
+    remote_count  = sum(1 for j in filtered if j["loc_class"] in ("remote", "remote+nyc"))
     print(f"\n{len(raw)} title-matched → {len(filtered)} after location "
+          f"(NYC={nyc_count} remote={remote_count} excluded-unknown={excluded_unknown}) "
           f"→ {len(url_deduped)} after URL-dedupe → {len(jobs)} after Gmail-dedupe")
     if skipped_url:
         print(f"(also skipped {skipped_url} by applied.csv URL/name match)")
+    if excluded_unknown and not include_unknown_loc:
+        print(f"(tip: --include-unknown-loc to see the {excluded_unknown} unclassified roles)")
     _output(jobs, 0)
 
 
@@ -609,6 +628,8 @@ def main():
                    help="Remote/US-wide roles only; drop NYC-specific listings")
     p.add_argument("--all-levels", action="store_true",
                    help="Keep Senior/Staff/Principal/Lead PM roles too (no seniority filter)")
+    p.add_argument("--include-unknown-loc", action="store_true",
+                   help="Include roles whose location could not be classified (may include non-NYC/non-remote)")
     args = p.parse_args()
 
     global INCLUDE_SENIOR
@@ -621,7 +642,7 @@ def main():
             p.error("'process' requires a FILE argument")
         cmd_process(args.file, args.remote_only)
     else:
-        cmd_local(args.remote_only)
+        cmd_local(args.remote_only, getattr(args, "include_unknown_loc", False))
 
 
 if __name__ == "__main__":

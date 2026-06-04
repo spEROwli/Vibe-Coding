@@ -111,32 +111,38 @@ def test_3_years():
         check(f"years/{desc[:40]}", raw, want)
 
 
-# ── TEST 4: remote toggle is a real strict subset ────────────────────────────
+# ── TEST 4: remote toggle + unknown-loc exclusion (P2) ───────────────────────
 
 def test_4_remote_toggle():
-    header(4, "remote toggle")
+    header(4, "remote toggle + unknown-loc exclusion")
     jobs = [
         {"company": "a", "title": "Product Manager", "url": "u/a", "loc_class": "remote"},
         {"company": "b", "title": "Product Manager", "url": "u/b", "loc_class": "remote+nyc"},
         {"company": "c", "title": "Product Manager", "url": "u/c", "loc_class": "nyc"},
         {"company": "d", "title": "Product Manager", "url": "u/d", "loc_class": "unknown"},
     ]
-    without = [j for j in jobs if pmfarm._passes_location(j["loc_class"], False)]
-    with_ro = [j for j in jobs if pmfarm._passes_location(j["loc_class"], True)]
+    # P2: unknown excluded by default
+    default  = [j for j in jobs if pmfarm._passes_location(j["loc_class"], False)]
+    # --include-unknown-loc: unknown is included
+    incl_unk = [j for j in jobs if pmfarm._passes_location(j["loc_class"], False, include_unknown=True)]
+    # --remote-only: only remote variants (no nyc, no unknown)
+    ro_only  = [j for j in jobs if pmfarm._passes_location(j["loc_class"], True)]
+    # --remote-only --include-unknown-loc: remote + unknown
+    ro_unk   = [j for j in jobs if pmfarm._passes_location(j["loc_class"], True, include_unknown=True)]
 
-    companies_without = {j["company"] for j in without}
-    companies_with    = {j["company"] for j in with_ro}
-    nyc_present_without = any(j["loc_class"] == "nyc" for j in without)
-    nyc_present_with    = any(j["loc_class"] == "nyc" for j in with_ro)
+    def cos(lst): return sorted(j["company"] for j in lst)
 
-    print(f"  without --remote-only : {sorted(companies_without)}  (want a,b,c,d)")
-    print(f"  with    --remote-only : {sorted(companies_with)}     (want a,b,d — no nyc)")
-    print(f"  nyc in without={nyc_present_without}, nyc in with={nyc_present_with}")
+    print(f"  default (no flags)              : {cos(default)}   (want a,b,c — not d)")
+    print(f"  --include-unknown-loc           : {cos(incl_unk)}  (want a,b,c,d)")
+    print(f"  --remote-only                   : {cos(ro_only)}   (want a,b — no nyc, no unknown)")
+    print(f"  --remote-only --include-unknown : {cos(ro_unk)}    (want a,b,d)")
 
-    check("without: all 4 loc classes pass", len(without), 4)
-    check("with: nyc dropped",               len(with_ro), 3)
-    check("with: nyc company absent",        "c" not in companies_with, True)
-    check("with: strict subset of without",  companies_with.issubset(companies_without), True)
+    check("default: unknown excluded",               "d" not in cos(default), True)
+    check("default: nyc, remote, remote+nyc pass",   len(default), 3)
+    check("include-unknown: all 4 pass",             len(incl_unk), 4)
+    check("remote-only: no nyc, no unknown",         len(ro_only), 2)
+    check("remote-only+unknown: adds unknown",       len(ro_unk), 3)
+    check("default CSV: zero unknown rows",          all(j["loc_class"] != "unknown" for j in default), True)
 
 
 # ── TEST 5: seniority filter — no false positives or false negatives ─────────
