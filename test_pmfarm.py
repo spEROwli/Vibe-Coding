@@ -231,33 +231,72 @@ def test_6_dead_slug():
     check("threaded live continues", pool_results["live-stripe"],      [])
 
 
-# ── TEST 7: idempotency — two back-to-back runs produce identical CSV ────────
+# ── TEST 7: idempotency — two back-to-back cmd_local runs produce identical CSV
 
 def test_7_idempotency():
-    header(7, "idempotency")
-    src = "search_results.json"
-    if not os.path.exists(src):
-        print("  skip  search_results.json not present — run the scraper first")
-        return
+    header(7, "idempotency (cmd_local with mocked ATS fetchers)")
+
+    MOCK_JOB = {
+        "source": "greenhouse", "company": "cursor",
+        "title": "Product Manager", "location": "New York, NY",
+        "loc_class": "nyc", "url": "https://boards.greenhouse.io/cursor/jobs/1",
+        "days_old": "3", "years_raw": "3-5", "years_context": "3-5 years of PM experience",
+        "years_sentence": "3-5 years of PM experience.", "hw_signal": "", "applied": "",
+    }
+
+    def mock_gh(slug):   return [dict(MOCK_JOB, company=slug, url=f"https://boards.greenhouse.io/{slug}/jobs/1")]
+    def mock_ash(slug):  return []
+    def mock_lev(slug):  return []
+
+    orig_gh  = pmfarm.fetch_greenhouse
+    orig_ash = pmfarm.fetch_ashby
+    orig_lev = pmfarm.fetch_lever
+    # Restrict to a single slug so the run is fast and deterministic
+    orig_gh_list  = pmfarm.GREENHOUSE
+    orig_ash_list = pmfarm.ASHBY
+    orig_lev_list = pmfarm.LEVER
 
     orig_out = pmfarm.OUTPUT_FILE
     fd1, tmp1 = tempfile.mkstemp(suffix=".csv")
     fd2, tmp2 = tempfile.mkstemp(suffix=".csv")
     os.close(fd1); os.close(fd2)
 
+    # Temp dir for gmail_applied.txt (empty → no gmail dedupe)
+    tmpdir = tempfile.mkdtemp()
+    orig_gmail = pmfarm.GMAIL_FILE
+    orig_applied = pmfarm.APPLIED_FILE
+
     try:
+        pmfarm.fetch_greenhouse = mock_gh
+        pmfarm.fetch_ashby      = mock_ash
+        pmfarm.fetch_lever      = mock_lev
+        pmfarm.GREENHOUSE       = ["cursor"]
+        pmfarm.ASHBY            = []
+        pmfarm.LEVER            = []
+        pmfarm.GMAIL_FILE       = os.path.join(tmpdir, "gmail_applied.txt")
+        pmfarm.APPLIED_FILE     = os.path.join(tmpdir, "applied.csv")
+
         pmfarm.OUTPUT_FILE = tmp1
-        pmfarm.cmd_process(src, remote_only=False)
+        pmfarm.cmd_local(remote_only=False)
         pmfarm.OUTPUT_FILE = tmp2
-        pmfarm.cmd_process(src, remote_only=False)
+        pmfarm.cmd_local(remote_only=False)
 
         with open(tmp1, newline="", encoding="utf-8") as f1, \
              open(tmp2, newline="", encoding="utf-8") as f2:
             rows1 = list(csv.DictReader(f1))
             rows2 = list(csv.DictReader(f2))
     finally:
-        pmfarm.OUTPUT_FILE = orig_out
+        pmfarm.fetch_greenhouse = orig_gh
+        pmfarm.fetch_ashby      = orig_ash
+        pmfarm.fetch_lever      = orig_lev
+        pmfarm.GREENHOUSE       = orig_gh_list
+        pmfarm.ASHBY            = orig_ash_list
+        pmfarm.LEVER            = orig_lev_list
+        pmfarm.OUTPUT_FILE      = orig_out
+        pmfarm.GMAIL_FILE       = orig_gmail
+        pmfarm.APPLIED_FILE     = orig_applied
         os.remove(tmp1); os.remove(tmp2)
+        shutil.rmtree(tmpdir)
 
     same_count = len(rows1) == len(rows2)
     same_urls  = [r["url"] for r in rows1] == [r["url"] for r in rows2]

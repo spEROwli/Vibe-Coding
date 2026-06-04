@@ -2,22 +2,14 @@
 """
 pmfarm.py — PM role scraper: Greenhouse · Ashby · Lever
 
-Local use (direct API, works outside Claude Code cloud):
-  python3 pmfarm.py [--remote-only]
+  python3 pmfarm.py [--remote-only] [--all-levels] [--include-unknown-loc]
 
-Claude Code iOS (WebSearch pipeline):
-  python3 pmfarm.py queries
-  python3 pmfarm.py process FILE [--remote-only]
-
-Dedupe: put an applied.csv (columns: company, url) next to this script.
-        Any role whose URL — or company+title pair — matches is silently skipped.
-        Fill the `applied` column in pm_roles.csv as you go; that file can serve
-        as next run's applied.csv.
+All data comes from live ATS JSON APIs. See SCRAPER_RULES.md.
+Dedupe: gmail_applied.txt (primary) + applied.csv (fallback).
 """
 
 import argparse, csv, datetime, html as H, json, re, sys, urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urlparse
 
 # ── FILTERS ──────────────────────────────────────────────────────────────────
 TITLE_MUST_INCLUDE = [
@@ -108,15 +100,6 @@ def _load_companies() -> tuple[list, list, list]:
 
 GREENHOUSE, ASHBY, LEVER = _load_companies()
 
-ATS_DOMAINS = {
-    "boards.greenhouse.io":     "Greenhouse",
-    "job-boards.greenhouse.io": "Greenhouse",
-    "jobs.lever.co":            "Lever",
-    "jobs.ashbyhq.com":         "Ashby",
-    "www.ycombinator.com":      "YC",
-    "ycombinator.com":          "YC",
-}
-
 # Requirement-style year patterns only. Deliberately NO bare "N years" pattern,
 # so phrasing like "10 years of combined team experience" is NOT mistaken for an
 # individual requirement. Each pattern's group(s) yield candidate year value(s);
@@ -140,8 +123,6 @@ YEARS_PATTERNS = [
 # not an individual PM requirement — so it is dropped.
 YEARS_DISQUALIFY = ["combined", "collective", "total", "company-wide", "across our"]
 
-CHUNK        = 8
-NEG          = ' -"senior" -"staff" -"principal" -"director" -"lead"'
 APPLIED_FILE = "applied.csv"
 GMAIL_FILE   = "gmail_applied.txt"  # synced by pmfarm_gmail_sync.py; one company per line
 OUTPUT_FILE  = "pm_roles.csv"
@@ -151,11 +132,6 @@ OUTPUT_FILE  = "pm_roles.csv"
 
 def _strip_html(text: str) -> str:
     return H.unescape(re.sub(r"<[^>]+>", " ", text or "")).strip()
-
-
-def _chunks(lst, n):
-    for i in range(0, len(lst), n):
-        yield lst[i:i+n]
 
 
 def _parse_years(text: str) -> tuple[str, str]:
@@ -472,68 +448,6 @@ def _output(jobs: list[dict], skipped: int = 0):
     print(f"Fill the 'applied' column as you go. Save as {APPLIED_FILE} to dedupe next run.")
 
 
-# ── phase 1: query generation (Claude Code iOS) ───────────────────────────────
-
-def cmd_queries():
-    specs = [
-        ("boards.greenhouse.io", GREENHOUSE),
-        ("jobs.ashbyhq.com",     ASHBY),
-        ("jobs.lever.co",        LEVER),
-    ]
-    out = []
-    for domain, companies in specs:
-        for chunk in _chunks(companies, CHUNK):
-            sites = " OR ".join(f"site:{domain}/{c}" for c in chunk)
-            out.append({"query": f'({sites}) "product manager"{NEG}', "domain": domain})
-    print(json.dumps(out, indent=2))
-
-
-# ── phase 2: process WebSearch results (Claude Code iOS) ─────────────────────
-
-def cmd_process(path: str, remote_only: bool):
-    with open(path) as f:
-        raw = json.load(f)
-
-    applied = _load_applied()
-    jobs    = []
-    for item in raw:
-        url     = item.get("url", "")
-        title   = item.get("title", "")
-        snippet = item.get("snippet", "") or item.get("description", "")
-        domain  = urlparse(url).netloc.lstrip("www.")
-        if domain not in ATS_DOMAINS or not _passes_title(title):
-            continue
-        lc = _loc_class("", snippet)
-        if not _passes_location(lc, remote_only):
-            continue
-        parts = urlparse(url).path.lstrip("/").split("/")
-        # YC URLs: /companies/<slug>/jobs/...  — use index 1
-        if domain in ("www.ycombinator.com", "ycombinator.com") and len(parts) > 1:
-            company = parts[1]
-        else:
-            company = parts[0]
-        years_raw, yc = _parse_years(snippet)
-        hw = "YES" if any(kw in (title + " " + snippet).lower() for kw in HARDWARE_SIGNAL) else ""
-        jobs.append({
-            "source":        ATS_DOMAINS[domain],
-            "company":       company,
-            "title":         title,
-            "location":      "",
-            "loc_class":     lc,
-            "url":           url,
-            "days_old":      "unknown",
-            "years_raw":     years_raw,
-            "years_context": yc,
-            "hw_signal":     hw,
-            "applied":       "",
-        })
-
-    pre     = len(jobs)
-    jobs    = _deduped(jobs, applied)
-    skipped = pre - len(jobs)
-    _output(jobs, skipped)
-
-
 # ── local mode ────────────────────────────────────────────────────────────────
 
 def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
@@ -620,10 +534,6 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    p.add_argument("cmd", nargs="?", default="local",
-                   choices=["local", "queries", "process"],
-                   help="local (default), queries, or process FILE")
-    p.add_argument("file", nargs="?", help="WebSearch results JSON (process mode only)")
     p.add_argument("--remote-only", action="store_true",
                    help="Remote/US-wide roles only; drop NYC-specific listings")
     p.add_argument("--all-levels", action="store_true",
@@ -635,14 +545,7 @@ def main():
     global INCLUDE_SENIOR
     INCLUDE_SENIOR = args.all_levels
 
-    if args.cmd == "queries":
-        cmd_queries()
-    elif args.cmd == "process":
-        if not args.file:
-            p.error("'process' requires a FILE argument")
-        cmd_process(args.file, args.remote_only)
-    else:
-        cmd_local(args.remote_only, getattr(args, "include_unknown_loc", False))
+    cmd_local(args.remote_only, args.include_unknown_loc)
 
 
 if __name__ == "__main__":
