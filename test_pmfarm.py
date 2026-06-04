@@ -121,29 +121,37 @@ def test_4_remote_toggle():
         {"company": "b", "title": "Product Manager", "url": "u/b", "loc_class": "remote+nyc"},
         {"company": "c", "title": "Product Manager", "url": "u/c", "loc_class": "nyc"},
         {"company": "d", "title": "Product Manager", "url": "u/d", "loc_class": "unknown"},
+        {"company": "e", "title": "Product Manager", "url": "u/e", "loc_class": "international"},
     ]
-    # P2: unknown excluded by default
+    # default: unknown excluded; international included (ranked below remote-US)
     default  = [j for j in jobs if pmfarm._passes_location(j["loc_class"], False)]
-    # --include-unknown-loc: unknown is included
+    # --include-unknown-loc: unknown also included
     incl_unk = [j for j in jobs if pmfarm._passes_location(j["loc_class"], False, include_unknown=True)]
-    # --remote-only: only remote variants (no nyc, no unknown)
+    # --remote-only: only remote variants (no nyc, no unknown, no international)
     ro_only  = [j for j in jobs if pmfarm._passes_location(j["loc_class"], True)]
-    # --remote-only --include-unknown-loc: remote + unknown
+    # --remote-only --include-unknown-loc: remote + unknown (not international)
     ro_unk   = [j for j in jobs if pmfarm._passes_location(j["loc_class"], True, include_unknown=True)]
 
     def cos(lst): return sorted(j["company"] for j in lst)
 
-    print(f"  default (no flags)              : {cos(default)}   (want a,b,c — not d)")
-    print(f"  --include-unknown-loc           : {cos(incl_unk)}  (want a,b,c,d)")
-    print(f"  --remote-only                   : {cos(ro_only)}   (want a,b — no nyc, no unknown)")
+    print(f"  default (no flags)              : {cos(default)}   (want a,b,c,e — not d)")
+    print(f"  --include-unknown-loc           : {cos(incl_unk)}  (want a,b,c,d,e)")
+    print(f"  --remote-only                   : {cos(ro_only)}   (want a,b — no nyc/unknown/intl)")
     print(f"  --remote-only --include-unknown : {cos(ro_unk)}    (want a,b,d)")
 
-    check("default: unknown excluded",               "d" not in cos(default), True)
-    check("default: nyc, remote, remote+nyc pass",   len(default), 3)
-    check("include-unknown: all 4 pass",             len(incl_unk), 4)
-    check("remote-only: no nyc, no unknown",         len(ro_only), 2)
-    check("remote-only+unknown: adds unknown",       len(ro_unk), 3)
-    check("default CSV: zero unknown rows",          all(j["loc_class"] != "unknown" for j in default), True)
+    # international location detection
+    check("_loc_class: non-empty non-US → international",  pmfarm._loc_class("Barcelona, Spain", ""), "international")
+    check("_loc_class: Brazil → international",            pmfarm._loc_class("Brazil", "Join us shaping communities"), "international")
+    check("_loc_class: empty location → unknown",          pmfarm._loc_class("", ""), "unknown")
+    check("_loc_class: 'us' in snippet no longer remote",  pmfarm._loc_class("", "Join us, tell us more"), "unknown")
+
+    check("default: unknown excluded",                    "d" not in cos(default), True)
+    check("default: international included",              "e" in cos(default), True)
+    check("default: nyc/remote/remote+nyc/intl pass",    len(default), 4)
+    check("include-unknown: all 5 pass",                 len(incl_unk), 5)
+    check("remote-only: no nyc/unknown/international",   len(ro_only), 2)
+    check("remote-only+unknown: adds unknown not intl",  len(ro_unk), 3)
+    check("default CSV: zero unknown rows",              all(j["loc_class"] != "unknown" for j in default), True)
 
 
 # ── TEST 5: seniority filter — no false positives or false negatives ─────────

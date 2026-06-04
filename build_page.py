@@ -100,7 +100,7 @@ def _is_priority(row: dict) -> bool:
 
 
 def _loc_rank(lc: str) -> int:
-    return {"nyc": 0, "remote+nyc": 1, "remote": 2, "unknown": 3}.get(lc, 4)
+    return {"nyc": 0, "remote+nyc": 1, "remote": 2, "international": 3, "unknown": 4}.get(lc, 5)
 
 
 def _age(row: dict) -> int:
@@ -130,7 +130,7 @@ def _years_line(row: dict) -> str:
 
 
 LOC_LABEL = {"nyc": "NYC", "remote+nyc": "NYC / Remote", "remote": "Remote",
-             "unknown": "Location n/a"}
+             "international": "International", "unknown": "Location n/a"}
 
 
 def _age_label(row: dict) -> str:
@@ -166,7 +166,8 @@ def _card(row: dict, priority: bool) -> str:
 def _render_bucket(rows: list) -> str:
     """Render cards with section dividers between freshness×location groups."""
     AGE_LABELS = ["🟢 This week", "🟡 1–3 weeks ago", "🔴 3+ weeks ago"]
-    LOC_LABELS = {"nyc": "NYC only", "remote+nyc": "NYC + Remote", "remote": "Remote", "unknown": "Location TBD"}
+    LOC_LABELS = {"nyc": "NYC only", "remote+nyc": "NYC + Remote", "remote": "Remote",
+                  "international": "International", "unknown": "Location TBD"}
     parts = []
     last_key = None
     for r in rows:

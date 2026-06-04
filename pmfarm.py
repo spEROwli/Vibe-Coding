@@ -30,7 +30,7 @@ _SENIORITY_RE = re.compile(
 )
 
 NYC_LOCS    = ["new york", "nyc", "brooklyn", "manhattan"]
-REMOTE_LOCS = ["remote", "united states", "anywhere", "us", "nationwide",
+REMOTE_LOCS = ["remote", "united states", "anywhere", "nationwide",
                "distributed", "work from anywhere", "work from home"]
 
 # Keywords in description that signal the role values engineering background.
@@ -147,7 +147,8 @@ def _record(source: str, slug: str, status: str) -> None:
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _strip_html(text: str) -> str:
-    return H.unescape(re.sub(r"<[^>]+>", " ", text or "")).strip()
+    # Unescape first so &lt;p&gt; → <p> before the tag regex runs.
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", H.unescape(text or ""))).strip()
 
 
 def _parse_years(text: str) -> tuple[str, str]:
@@ -185,7 +186,7 @@ def _years_sentence(text: str) -> str:
     """Return the first verbatim sentence containing 'year(s)' from the JD content,
     else 'not stated'. SCRAPER_RULES: the years field must be the exact JD sentence,
     never a bucket or a derived number. Run on FULL content, not a truncation."""
-    t = re.sub(r"\s+", " ", text or "").strip()
+    t = re.sub(r"\s+", " ", _strip_html(text or "")).strip()
     for sentence in re.split(r"(?<=[.!?])\s+", t):
         if re.search(r"\byears?\b", sentence, re.I):
             return sentence.strip()[:300]
@@ -213,6 +214,10 @@ def _loc_class(location: str, snippet: str) -> str:
         return "remote"
     if has_nyc:
         return "nyc"
+    # A non-empty location that didn't match US/remote patterns is a real place
+    # outside the US. Keep it visible but ranked below NYC and remote-US.
+    if location.strip():
+        return "international"
     return "unknown"
 
 
@@ -261,7 +266,7 @@ def _passes_location(lc: str, remote_only: bool, include_unknown: bool = False) 
     if remote_only:
         allowed = {"remote", "remote+nyc"}
     else:
-        allowed = {"remote", "remote+nyc", "nyc"}
+        allowed = {"remote", "remote+nyc", "nyc", "international"}
     if include_unknown:
         allowed.add("unknown")
     return lc in allowed
