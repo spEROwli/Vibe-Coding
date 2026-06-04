@@ -127,6 +127,14 @@ APPLIED_FILE = "applied.csv"
 GMAIL_FILE   = "gmail_applied.txt"  # synced by pmfarm_gmail_sync.py; one company per line
 OUTPUT_FILE  = "pm_roles.csv"
 
+# Populated by fetch_* functions; reset at the start of each cmd_local run.
+# key = "source:slug", value = "ok" | "empty" | "fail"
+_slug_resolution: dict[str, str] = {}
+
+
+def _record(source: str, slug: str, status: str) -> None:
+    _slug_resolution[f"{source}:{slug}"] = status
+
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -348,6 +356,7 @@ def _fetch(url: str) -> dict | list | None:
 def fetch_greenhouse(slug: str) -> list[dict]:
     data = _fetch(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true")
     if not data:
+        _record("GH", slug, "fail")
         return []
     out = []
     for j in data.get("jobs", []):
@@ -362,12 +371,14 @@ def fetch_greenhouse(slug: str) -> list[dict]:
             j.get("absolute_url", ""), content[:500],
             j.get("updated_at"), full_content=content,
         ))
+    _record("GH", slug, "ok" if out else "empty")
     return out
 
 
 def fetch_ashby(slug: str) -> list[dict]:
     data = _fetch(f"https://api.ashbyhq.com/posting-api/job-board/{slug}")
     if not data:
+        _record("Ashby", slug, "fail")
         return []
     jobs = data if isinstance(data, list) else data.get("jobPostings", [])
     out  = []
@@ -383,12 +394,14 @@ def fetch_ashby(slug: str) -> list[dict]:
             None,   # Ashby does not reliably expose a post date
             full_content=content,
         ))
+    _record("Ashby", slug, "ok" if out else "empty")
     return out
 
 
 def fetch_lever(slug: str) -> list[dict]:
     data = _fetch(f"https://api.lever.co/v0/postings/{slug}?mode=json&limit=250")
     if not data:
+        _record("Lever", slug, "fail")
         return []
     jobs = data if isinstance(data, list) else data.get("postings", [])
     out  = []
@@ -406,6 +419,7 @@ def fetch_lever(slug: str) -> list[dict]:
             j.get("hostedUrl", ""), content[:500],
             date_str, full_content=content,
         ))
+    _record("Lever", slug, "ok" if out else "empty")
     return out
 
 
@@ -451,6 +465,8 @@ def _output(jobs: list[dict], skipped: int = 0):
 # ── local mode ────────────────────────────────────────────────────────────────
 
 def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
+    _slug_resolution.clear()
+
     # ── Gmail company-level dedupe (primary source of truth) ──────────────────
     gmail_set, gmail_evidence = _gmail_applied_set()
     print(f"\nGmail applied set: {len(gmail_set)} companies")
@@ -523,6 +539,20 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
         print(f"(also skipped {skipped_url} by applied.csv URL/name match)")
     if excluded_unknown and not include_unknown_loc:
         print(f"(tip: --include-unknown-loc to see the {excluded_unknown} unclassified roles)")
+
+    # ── slug resolution table (P4 observability) ──────────────────────────────
+    if _slug_resolution:
+        ok_n    = sum(1 for v in _slug_resolution.values() if v == "ok")
+        empty_n = sum(1 for v in _slug_resolution.values() if v == "empty")
+        fail_n  = sum(1 for v in _slug_resolution.values() if v == "fail")
+        total_n = len(_slug_resolution)
+        print(f"\nSlug hit-rate: {ok_n}/{total_n} with PM roles | "
+              f"{empty_n} resolved-empty | {fail_n} failed (404/timeout)")
+        if fail_n:
+            failed = [k for k, v in sorted(_slug_resolution.items()) if v == "fail"]
+            print("  Failed slugs: " + ", ".join(failed[:20])
+                  + (f" … +{fail_n - 20} more" if fail_n > 20 else ""))
+
     _output(jobs, 0)
 
 

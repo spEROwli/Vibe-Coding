@@ -453,6 +453,85 @@ def test_9_gmail_dedupe():
         pmfarm.GMAIL_FILE = orig_gf
 
 
+# ── TEST 10: slug resolution tracking (P4) ───────────────────────────────────
+
+def test_10_slug_resolution():
+    header(10, "slug resolution tracking")
+
+    orig_gh  = pmfarm.fetch_greenhouse
+    orig_ash = pmfarm.fetch_ashby
+    orig_lev = pmfarm.fetch_lever
+    orig_gh_list  = pmfarm.GREENHOUSE
+    orig_ash_list = pmfarm.ASHBY
+    orig_lev_list = pmfarm.LEVER
+    orig_out      = pmfarm.OUTPUT_FILE
+    orig_gmail    = pmfarm.GMAIL_FILE
+    orig_applied  = pmfarm.APPLIED_FILE
+
+    fd, tmp_out = tempfile.mkstemp(suffix=".csv")
+    os.close(fd)
+    tmpdir = tempfile.mkdtemp()
+
+    # slug_a → 1 PM role  (ok)
+    # slug_b → 0 PM roles (empty)
+    # slug_c → None fetch (fail)
+    def mock_gh(slug):
+        if slug == "slug_a":
+            pmfarm._record("GH", slug, "ok")
+            return [{"source": "Greenhouse", "company": slug,
+                     "title": "Product Manager", "location": "New York, NY",
+                     "loc_class": "nyc", "url": f"https://boards.greenhouse.io/{slug}/jobs/1",
+                     "days_old": "1", "years_raw": "2", "years_context": "2+ years",
+                     "years_sentence": "2+ years of experience.", "hw_signal": "", "applied": ""}]
+        if slug == "slug_b":
+            pmfarm._record("GH", slug, "empty")
+            return []
+        # slug_c
+        pmfarm._record("GH", slug, "fail")
+        return []
+
+    try:
+        pmfarm.fetch_greenhouse = mock_gh
+        pmfarm.fetch_ashby      = lambda s: []
+        pmfarm.fetch_lever      = lambda s: []
+        pmfarm.GREENHOUSE       = ["slug_a", "slug_b", "slug_c"]
+        pmfarm.ASHBY            = []
+        pmfarm.LEVER            = []
+        pmfarm.OUTPUT_FILE      = tmp_out
+        pmfarm.GMAIL_FILE       = os.path.join(tmpdir, "gmail_applied.txt")
+        pmfarm.APPLIED_FILE     = os.path.join(tmpdir, "applied.csv")
+
+        pmfarm._slug_resolution.clear()
+        pmfarm.cmd_local(remote_only=False)
+
+        res = dict(pmfarm._slug_resolution)
+    finally:
+        pmfarm.fetch_greenhouse = orig_gh
+        pmfarm.fetch_ashby      = orig_ash
+        pmfarm.fetch_lever      = orig_lev
+        pmfarm.GREENHOUSE       = orig_gh_list
+        pmfarm.ASHBY            = orig_ash_list
+        pmfarm.LEVER            = orig_lev_list
+        pmfarm.OUTPUT_FILE      = orig_out
+        pmfarm.GMAIL_FILE       = orig_gmail
+        pmfarm.APPLIED_FILE     = orig_applied
+        os.remove(tmp_out)
+        shutil.rmtree(tmpdir)
+
+    print(f"  _slug_resolution = {res}")
+    ok_n    = sum(1 for v in res.values() if v == "ok")
+    empty_n = sum(1 for v in res.values() if v == "empty")
+    fail_n  = sum(1 for v in res.values() if v == "fail")
+
+    check("slug_a → ok",    res.get("GH:slug_a"), "ok")
+    check("slug_b → empty", res.get("GH:slug_b"), "empty")
+    check("slug_c → fail",  res.get("GH:slug_c"), "fail")
+    check("ok count = 1",    ok_n,    1)
+    check("empty count = 1", empty_n, 1)
+    check("fail count = 1",  fail_n,  1)
+    check("total tracked = 3", len(res), 3)
+
+
 # ── run all ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -465,6 +544,7 @@ if __name__ == "__main__":
     test_7_idempotency()
     test_8_honest_limits()
     test_9_gmail_dedupe()
+    test_10_slug_resolution()
 
     n_fail = sum(1 for r in results if r[0] == FAIL)
     print(f"\n{'═'*68}")
