@@ -109,9 +109,16 @@ def _age(row: dict) -> int:
         return 9999
 
 
+def _age_bucket(row: dict) -> int:
+    a = _age(row)
+    if a <= 7:  return 0   # fresh   (≤7d)
+    if a <= 21: return 1   # recent  (8–21d)
+    return 2               # stale   (22d+)
+
+
 def _fit_key(row: dict) -> tuple:
-    # lower = better: priority sector first, then NYC>remote>other, then newest
-    return (0 if _is_priority(row) else 1, _loc_rank(row.get("loc_class", "")), _age(row))
+    # fresh first, then priority sector, then NYC>remote>other, then newest
+    return (_age_bucket(row), 0 if _is_priority(row) else 1, _loc_rank(row.get("loc_class", "")), _age(row))
 
 
 def _years_line(row: dict) -> str:
@@ -125,6 +132,14 @@ LOC_LABEL = {"nyc": "NYC", "remote+nyc": "NYC / Remote", "remote": "Remote",
              "unknown": "Location n/a"}
 
 
+def _age_label(row: dict) -> str:
+    a = _age(row)
+    if a == 9999: return "age unknown"
+    if a == 0:    return "today"
+    if a == 1:    return "1d ago"
+    return f"{a}d ago"
+
+
 def _card(row: dict, priority: bool) -> str:
     company  = html.escape(row.get("company", "").title())
     title    = html.escape(row.get("title", ""))
@@ -134,8 +149,11 @@ def _card(row: dict, priority: bool) -> str:
     hw       = ' <span class="flag">🔩 fit</span>' if row.get("hw_signal") == "YES" else ""
     star     = ' <span class="flag star">★</span>' if priority else ""
     ystyle   = "ns" if years == "not stated" else "yr"
+    age_str  = html.escape(_age_label(row))
+    ab       = _age_bucket(row)
+    aclass   = ("ag-fresh" if ab == 0 else "ag-recent" if ab == 1 else "ag-stale")
     return f"""  <div class="card{' pri' if priority else ''}">
-    <div class="co">{company}{star}{hw}</div>
+    <div class="co">{company}{star}{hw} <span class="ag {aclass}">{age_str}</span></div>
     <div class="ti">{title}</div>
     <div class="lo">📍 {loc}</div>
     <div class="ye {ystyle}">{years}</div>
@@ -188,6 +206,10 @@ def build():
   .ye.yr {{ color:#bf6000; }}
   .ye.ns {{ color:#999; font-style:italic; }}
   .flag {{ font-size:11px; }} .flag.star {{ color:#007aff; }}
+  .ag {{ font-size:10px; font-weight:600; padding:2px 6px; border-radius:10px; float:right; }}
+  .ag-fresh  {{ background:#e8f5e9; color:#2e7d32; }}
+  .ag-recent {{ background:#fff8e1; color:#b45309; }}
+  .ag-stale  {{ background:#fce4ec; color:#b71c1c; }}
   .btn {{ display:block; text-align:center; background:#007aff; color:#fff; font-size:15px;
          font-weight:600; padding:10px; border-radius:10px; text-decoration:none; margin-top:4px;
          -webkit-tap-highlight-color:transparent; }}
@@ -208,7 +230,7 @@ def build():
   sentence are copied from the JD — none inferred or invented.
 </div>
 
-<div class="lbl">✅ In Range — IC level, ≤3 yrs or not stated (sorted by fit)</div>
+<div class="lbl">✅ In Range — IC level, ≤3 yrs or not stated · sorted fresh→recent→stale, then fit</div>
 {a_cards}
 
 <details>
