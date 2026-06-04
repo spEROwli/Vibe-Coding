@@ -31,6 +31,17 @@ LOG="$LOG_DIR/pmfarm_$(date +%Y%m%d_%H%M%S).log"
   # 3. Build HTML dashboard from pm_roles.csv.
   python3 build_page.py
 
+  # 4. Publish updated HTML to GitHub Pages.
+  #    Only commits if pm_roles.html actually changed (idempotent).
+  if ! git diff --quiet pm_roles.html 2>/dev/null; then
+    git add pm_roles.html
+    git commit -m "daily update $(date -u +%Y-%m-%d)"
+    git push origin HEAD
+    echo "  [ok] pm_roles.html pushed to GitHub"
+  else
+    echo "  [skip] pm_roles.html unchanged — nothing to push"
+  fi
+
   echo "=== done $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
 } | tee "$LOG"
 
