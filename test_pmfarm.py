@@ -656,6 +656,85 @@ def test_11_build_page_contract():
         os.remove(tmp_html)
 
 
+# ── TEST 12: brittle edge cases from live run failures ───────────────────────
+
+def test_12_edge_cases():
+    header(12, "brittle edge cases from live runs")
+
+    # ── _strip_html: doubly-encoded HTML must be fully removed ────────────────
+    # &lt;p&gt; → <p> after unescape → stripped by regex
+    check("strip: doubly-encoded &lt;p&gt;",
+          pmfarm._strip_html("&lt;p&gt;Hello&lt;/p&gt;"), "Hello")
+    check("strip: nested tags",
+          pmfarm._strip_html("<ul><li>2+ years</li></ul>"), "2+ years")
+    check("strip: mixed encoded and literal",
+          pmfarm._strip_html("&lt;strong&gt;5+ years&lt;/strong&gt; required"), "5+ years required")
+    check("strip: empty string",
+          pmfarm._strip_html(""), "")
+    check("strip: None-like empty",
+          pmfarm._strip_html(None), "")  # type: ignore
+
+    # ── _years_sentence: must return plain text, never raw HTML ───────────────
+    html_content = "<p>We require <strong>3+ years</strong> of PM experience.</p>"
+    sent = pmfarm._years_sentence(html_content)
+    check("years_sentence: no HTML tags in output", "<" not in sent, True)
+    check("years_sentence: contains years number",  "3" in sent, True)
+
+    doubly_encoded = "&lt;p&gt;You need 2+ years of experience.&lt;/p&gt;"
+    sent2 = pmfarm._years_sentence(doubly_encoded)
+    check("years_sentence: no encoded tags in output", "&lt;" not in sent2, True)
+
+    # ── _loc_class: SF / non-NYC US cities must be excluded ───────────────────
+    check("loc: SF,United States → unknown",
+          pmfarm._loc_class("San Francisco, United States", ""), "unknown")
+    check("loc: San Francisco, CA → unknown",
+          pmfarm._loc_class("San Francisco, CA", ""), "unknown")
+    check("loc: Mountain View, California → unknown",
+          pmfarm._loc_class("Mountain View, California, US", ""), "unknown")
+    check("loc: California - Pleasanton → unknown",
+          pmfarm._loc_class("California - Pleasanton", ""), "unknown")
+    check("loc: Massachusetts - Boston → unknown",
+          pmfarm._loc_class("Massachusetts - Boston", ""), "unknown")
+    check("loc: Seattle, WA → unknown",
+          pmfarm._loc_class("Seattle, WA", ""), "unknown")
+
+    # ── _loc_class: explicit remote overrides city name ───────────────────────
+    check("loc: Remote, San Francisco → remote",
+          pmfarm._loc_class("Remote, San Francisco", ""), "remote")
+    check("loc: San Francisco - Remote → remote",
+          pmfarm._loc_class("San Francisco - Remote", ""), "remote")
+
+    # ── _loc_class: bare "United States" (no city) = remote ──────────────────
+    check("loc: United States alone → remote",
+          pmfarm._loc_class("United States", ""), "remote")
+
+    # ── _loc_class: international cities still classified correctly ───────────
+    check("loc: Budapest, Hungary → international",
+          pmfarm._loc_class("Budapest, Hungary", ""), "international")
+    check("loc: Aveiro (Portugal) → international",
+          pmfarm._loc_class("Aveiro", ""), "international")
+    check("loc: EMEA multi-location → international",
+          pmfarm._loc_class("Europe, Middle East, and Africa", ""), "international")
+
+    # ── _loc_class: NYC variants ──────────────────────────────────────────────
+    check("loc: New York, NY → nyc",
+          pmfarm._loc_class("New York, NY", ""), "nyc")
+    check("loc: NYC Global HQ → nyc",
+          pmfarm._loc_class("NYC Global HQ", ""), "nyc")
+
+    # ── build_page: stale roles (60d+) must still sort after fresh ones ───────
+    fresh = {"loc_class": "nyc", "days_old": "2",  "years_raw": "2", "years_sentence": "2+ years.", "title": "PM", "hw_signal": ""}
+    stale = {"loc_class": "nyc", "days_old": "61", "years_raw": "2", "years_sentence": "2+ years.", "title": "PM", "hw_signal": ""}
+    check("sort: fresh (2d) before stale (61d)",
+          build_page._fit_key(fresh) < build_page._fit_key(stale), True)
+
+    # ── build_page: international ranks after remote ──────────────────────────
+    remote_row = {"loc_class": "remote",        "days_old": "5", "years_raw": "2", "years_sentence": "", "title": "PM", "hw_signal": ""}
+    intl_row   = {"loc_class": "international", "days_old": "1", "years_raw": "2", "years_sentence": "", "title": "PM", "hw_signal": ""}
+    check("sort: remote (5d) before international (1d)",
+          build_page._fit_key(remote_row) < build_page._fit_key(intl_row), True)
+
+
 # ── run all ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -670,6 +749,7 @@ if __name__ == "__main__":
     test_9_gmail_dedupe()
     test_10_slug_resolution()
     test_11_build_page_contract()
+    test_12_edge_cases()
 
     n_fail = sum(1 for r in results if r[0] == FAIL)
     print(f"\n{'═'*68}")

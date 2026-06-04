@@ -30,9 +30,11 @@ LOG="$LOG_DIR/pmfarm_$(date +%Y%m%d_%H%M%S).log"
 
   cd "$SCRIPT_DIR"
 
-  # 1. Sync applied companies from Gmail (requires prior --setup).
-  #    Fails silently if token is missing — applied.csv still dedupes.
-  "$PYTHON" pmfarm_gmail_sync.py 2>&1 || echo "  [warn] Gmail sync skipped (token missing?)"
+  # 1. Sync applied companies from Gmail (optional).
+  #    Only runs if the OAuth token exists — set up with pmfarm_gmail_sync.py --setup.
+  if [ -f "$HOME/.config/pmfarm/gmail_token.json" ]; then
+    "$PYTHON" pmfarm_gmail_sync.py 2>&1 || echo "  [warn] Gmail sync failed — check token"
+  fi
 
   # 2. Scrape ATS APIs and write pm_roles.csv.
   python3 pmfarm.py --all-levels

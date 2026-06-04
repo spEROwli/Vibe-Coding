@@ -33,6 +33,22 @@ NYC_LOCS    = ["new york", "nyc", "brooklyn", "manhattan"]
 REMOTE_LOCS = ["remote", "united states", "anywhere", "nationwide",
                "distributed", "work from anywhere", "work from home"]
 
+# Specific US metros that are NOT NYC. If a location names one of these
+# cities without also saying "remote", the role is in-office outside NYC
+# and gets loc_class="unknown" (excluded by default).
+_US_NON_NYC = [
+    "san francisco", "seattle", "chicago", "austin", "boston",
+    "los angeles", "denver", "atlanta", "portland", "miami",
+    "dallas", "houston", "phoenix", "san jose", "pleasanton",
+    "palo alto", "mountain view", "menlo park", "redwood city",
+    "san carlos", "bellevue", "kirkland", "cambridge", "pittsburgh",
+    "philadelphia", "minneapolis", "nashville", "charlotte", "raleigh",
+    "salt lake city", "san diego", "las vegas", "tampa", "orlando",
+    "detroit", "cleveland", "cincinnati", "indianapolis", "st. louis",
+    "kansas city", "new orleans", "richmond", "baltimore", "washington dc",
+    "washington, dc", "washington, d.c",
+]
+
 # Keywords in description that signal the role values engineering background.
 # Surfaced in terminal output as a "signal" flag — not used for filtering.
 HARDWARE_SIGNAL = [
@@ -205,17 +221,31 @@ def _norm_url(url: str) -> str:
 
 
 def _loc_class(location: str, snippet: str) -> str:
-    combined   = (location + " " + snippet).lower()
-    has_remote = any(r in combined for r in REMOTE_LOCS)
-    has_nyc    = any(n in combined for n in NYC_LOCS)
+    loc_lower = location.lower()
+    combined  = (location + " " + snippet).lower()
+    has_nyc   = any(n in combined for n in NYC_LOCS)
+
+    # Explicit "remote" anywhere → always remote, regardless of city mentioned.
+    has_explicit_remote = "remote" in combined
+
+    # Generic US location terms ("united states", "anywhere", etc.) only count
+    # if no specific non-NYC US city is named in the location field. This
+    # prevents "San Francisco, United States" from matching as remote.
+    has_non_nyc_us = any(c in loc_lower for c in _US_NON_NYC)
+    has_us_generic = (not has_non_nyc_us) and any(r in combined for r in REMOTE_LOCS)
+
+    has_remote = has_explicit_remote or has_us_generic
+
     if has_remote and has_nyc:
         return "remote+nyc"
     if has_remote:
         return "remote"
     if has_nyc:
         return "nyc"
-    # A non-empty location that didn't match US/remote patterns is a real place
-    # outside the US. Keep it visible but ranked below NYC and remote-US.
+    # Known non-NYC US city, no remote signal → in-office US, excluded by default.
+    if has_non_nyc_us:
+        return "unknown"
+    # Non-empty location that didn't match US patterns → international.
     if location.strip():
         return "international"
     return "unknown"
