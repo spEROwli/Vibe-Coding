@@ -734,6 +734,65 @@ def test_12_edge_cases():
     check("sort: remote (5d) before international (1d)",
           build_page._fit_key(remote_row) < build_page._fit_key(intl_row), True)
 
+    # ── _loc_class: snippet text must NOT affect classification ───────────────
+    # Boston role with "remote" in JD body was formerly misclassified as remote.
+    check("loc: Boston + 'remote' in snippet → unknown",
+          pmfarm._loc_class("Boston, MA", "We offer remote work flexibility"), "unknown")
+    check("loc: Chicago + 'New York' in snippet → unknown (not nyc)",
+          pmfarm._loc_class("Chicago, IL", "Visit our New York office for onboarding"), "unknown")
+
+    # ── _loc_class: bare "Washington" (state/DC without qualifier) → unknown ──
+    check("loc: Washington (bare) → unknown",
+          pmfarm._loc_class("Washington", ""), "unknown")
+
+    # ── _years_sentence: bullet-list JDs return just the relevant bullet ──────
+    bullet_jd = "<ul><li>Minimum 3+ years of PM experience required</li><li>Strong communication skills</li></ul>"
+    sent_bullet = pmfarm._years_sentence(bullet_jd)
+    check("years_sentence: bullet list → contains years number",  "3" in sent_bullet, True)
+    check("years_sentence: bullet list → no raw HTML",            "<" not in sent_bullet, True)
+    check("years_sentence: bullet list → not a 300-char blob",    len(sent_bullet) < 100, True)
+
+    # ── fetch_greenhouse: list response (not dict) must return [] not crash ────
+    orig_fetch = pmfarm._fetch
+    def _mock_gh_list(_url): return [{"id": 1}]   # list instead of dict
+    pmfarm._fetch = _mock_gh_list
+    try:
+        gh_list_result = pmfarm.fetch_greenhouse("testslug")
+    finally:
+        pmfarm._fetch = orig_fetch
+    check("greenhouse list response → []", gh_list_result, [])
+
+    # ── fetch_lever: ts=0 (epoch) must produce a numeric days_old, not unknown ─
+    def _mock_lever_ts0(_url):
+        return [{"text": "Product Manager",
+                 "categories": {"location": "Remote"},
+                 "lists": [], "createdAt": 0,
+                 "hostedUrl": "https://jobs.lever.co/slug/1"}]
+    pmfarm._fetch = _mock_lever_ts0
+    try:
+        lever_ts0_roles = pmfarm.fetch_lever("slug")
+    finally:
+        pmfarm._fetch = orig_fetch
+    check("lever ts=0 → days_old is numeric (not unknown)",
+          lever_ts0_roles and lever_ts0_roles[0]["days_old"] != "unknown", True)
+
+    # ── _load_companies: partial cache must fall back per-ATS ─────────────────
+    import tempfile, json as _json
+    cache_partial = {"greenhouse": [{"slug": "only-gh-co", "tags": []}], "ashby": [], "lever": []}
+    fd, cache_path = tempfile.mkstemp(suffix=".json")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        _json.dump(cache_partial, f)
+    orig_cache = pmfarm._CACHE_FILE
+    pmfarm._CACHE_FILE = cache_path
+    try:
+        _gh, _ash, _lev = pmfarm._load_companies()
+    finally:
+        pmfarm._CACHE_FILE = orig_cache
+        os.remove(cache_path)
+    check("partial cache: gh uses cache value",        _gh,       ["only-gh-co"])
+    check("partial cache: ashby falls back to default", len(_ash) > 5, True)
+    check("partial cache: lever falls back to default", len(_lev) > 5, True)
+
 
 # ── run all ───────────────────────────────────────────────────────────────────
 

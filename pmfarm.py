@@ -46,7 +46,7 @@ _US_NON_NYC = [
     "salt lake city", "san diego", "las vegas", "tampa", "orlando",
     "detroit", "cleveland", "cincinnati", "indianapolis", "st. louis",
     "kansas city", "new orleans", "richmond", "baltimore", "washington dc",
-    "washington, dc", "washington, d.c",
+    "washington, dc", "washington, d.c", "washington",
 ]
 
 # Keywords in description that signal the role values engineering background.
@@ -66,60 +66,67 @@ LANGUAGE_SIGNAL = [
 ]
 
 # ── COMPANIES ─────────────────────────────────────────────────────────────────
-# Loaded from verified_companies.json if present; falls back to these defaults.
+# Loaded from verified_companies.json if present; falls back to these defaults
+# per-ATS (so a cache with only greenhouse slugs still gets Ashby/Lever coverage).
 # Run discover.py locally to grow the cache with YC-seeded companies.
 _CACHE_FILE = "verified_companies.json"
 
+_FALLBACK_GH = [
+    "betterment", "robinhood", "justworks", "mongodb", "datadog", "figma",
+    "stripe", "brex", "plaid", "affirm", "sofi", "gusto", "rippling",
+    "doubleverify", "pinterest", "carta", "hubspot", "webflow", "etsy",
+    "duolingo", "airtable", "benchling", "cockroachlabs", "coda",
+    "gemini", "navan", "whatnot", "modal", "replit",
+    "hingehealth", "springhealth", "headway", "cerebral", "lyra",
+    "ro", "twentyeight-health", "tempus", "color", "flatiron",
+    "peloton", "whoop", "oura", "brilliant", "verkada",
+    "mantrahealth", "alteradigitalhealth", "mavenclinic", "airbnb",
+]
+_FALLBACK_ASH = [
+    "notion", "harvey", "ramp", "cohere", "linear", "supabase", "mercury",
+    "vanta", "clay", "deel", "retool", "scale-ai", "perplexity", "vercel",
+    "anyscale", "cursor", "glean", "watershed", "alchemy", "dbt-labs",
+    "openai", "anthropic", "arc", "prefect", "runway",
+    "nuvation", "sword-health", "nirahealth", "turquoise-health", "ribbon-health",
+    "oneapp", "airwallex", "pivotal-health", "plaid", "brigit",
+]
+_FALLBACK_LEV = [
+    "airbnb", "shopify", "canva", "asana", "zendesk", "squarespace",
+    "intercom", "netlify", "sendbird", "postman", "contentful",
+    "amplitude", "mixpanel", "pagerduty", "cloudflare", "hashicorp",
+    "nuro", "veracyte",
+    "tenna", "cents", "salvohealth", "mistral", "luni", "Flex",
+]
+
+
 def _load_companies() -> tuple[list, list, list]:
+    gh = ash = lev = None
     try:
         import os
         if os.path.exists(_CACHE_FILE):
-            data = json.loads(open(_CACHE_FILE).read())
+            data = json.loads(open(_CACHE_FILE, encoding="utf-8").read())
             cand = data.get("candidates", {})
             # Merge verified slugs with the wider candidate pool. Candidates are
             # unconfirmed company guesses; a bad slug simply returns no jobs from
             # the API (harmless), while good ones widen coverage for free.
             def _merge(key):
                 seen, out = set(), []
-                for src in (data.get(key, []), cand.get(key, [])):
+                for src in (data.get(key) or [], cand.get(key) or []):
                     for e in src:
                         s = e["slug"] if isinstance(e, dict) else e
                         if s and s not in seen:
                             seen.add(s); out.append(s)
-                return out
-            gh, ash, lev = _merge("greenhouse"), _merge("ashby"), _merge("lever")
-            if gh or ash or lev:
-                return gh, ash, lev
-    except Exception:
-        pass
-    # Hardcoded fallback — used when cache file is absent
+                return out or None   # None → fall through to hardcoded fallback
+            gh  = _merge("greenhouse")
+            ash = _merge("ashby")
+            lev = _merge("lever")
+    except Exception as e:
+        print(f"  [warn] could not load {_CACHE_FILE}: {e}", file=sys.stderr)
+    # Fall back per-ATS so a partial cache never silently drops a whole provider.
     return (
-        [   # Greenhouse
-            "betterment", "robinhood", "justworks", "mongodb", "datadog", "figma",
-            "stripe", "brex", "plaid", "affirm", "sofi", "gusto", "rippling",
-            "doubleverify", "pinterest", "carta", "hubspot", "webflow", "etsy",
-            "duolingo", "airtable", "benchling", "cockroachlabs", "coda",
-            "gemini", "navan", "whatnot", "modal", "replit",
-            "hingehealth", "springhealth", "headway", "cerebral", "lyra",
-            "ro", "twentyeight-health", "tempus", "color", "flatiron",
-            "peloton", "whoop", "oura", "brilliant", "verkada",
-            "mantrahealth", "alteradigitalhealth", "mavenclinic", "airbnb",
-        ],
-        [   # Ashby
-            "notion", "harvey", "ramp", "cohere", "linear", "supabase", "mercury",
-            "vanta", "clay", "deel", "retool", "scale-ai", "perplexity", "vercel",
-            "anyscale", "cursor", "glean", "watershed", "alchemy", "dbt-labs",
-            "openai", "anthropic", "arc", "prefect", "runway",
-            "nuvation", "sword-health", "nirahealth", "turquoise-health", "ribbon-health",
-            "oneapp", "airwallex", "pivotal-health", "plaid", "brigit",
-        ],
-        [   # Lever
-            "airbnb", "shopify", "canva", "asana", "zendesk", "squarespace",
-            "intercom", "netlify", "sendbird", "postman", "contentful",
-            "amplitude", "mixpanel", "pagerduty", "cloudflare", "hashicorp",
-            "nuro", "veracyte",
-            "tenna", "cents", "salvohealth", "mistral", "luni", "Flex",
-        ],
+        gh  if gh  is not None else _FALLBACK_GH,
+        ash if ash is not None else _FALLBACK_ASH,
+        lev if lev is not None else _FALLBACK_LEV,
     )
 
 GREENHOUSE, ASHBY, LEVER = _load_companies()
@@ -164,7 +171,14 @@ def _record(source: str, slug: str, status: str) -> None:
 
 def _strip_html(text: str) -> str:
     # Unescape first so &lt;p&gt; → <p> before the tag regex runs.
-    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", H.unescape(text or ""))).strip()
+    t = H.unescape(text or "")
+    # Convert closing block-level tags to ". " so list items become distinct
+    # pseudo-sentences that _years_sentence can split on.
+    t = re.sub(r"</?(li|p|br|div|tr|h[1-6]|ul|ol|table|tbody|thead|th|td)\b[^>]*>",
+               ". ", t, flags=re.I)
+    t = re.sub(r"<[^>]+>", " ", t)
+    t = re.sub(r"(\.\s*){2,}", ". ", t)   # collapse ". . . " → ". "
+    return re.sub(r"\s+", " ", t).strip(" .")
 
 
 def _parse_years(text: str) -> tuple[str, str]:
@@ -220,34 +234,27 @@ def _norm_url(url: str) -> str:
     return u.rstrip("/")
 
 
-def _loc_class(location: str, snippet: str) -> str:
+def _loc_class(location: str, snippet: str = "") -> str:
+    # Classification uses only the location field, not the JD snippet, to prevent
+    # body text like "remote work options" from misclassifying in-office roles.
     loc_lower = location.lower()
-    combined  = (location + " " + snippet).lower()
-    has_nyc   = any(n in combined for n in NYC_LOCS)
+    has_nyc             = any(n in loc_lower for n in NYC_LOCS)
 
-    # Explicit "remote" anywhere → always remote, regardless of city mentioned.
-    has_explicit_remote = "remote" in combined
+    # Explicit "remote" in the location field always wins.
+    has_explicit_remote = "remote" in loc_lower
 
-    # Generic US location terms ("united states", "anywhere", etc.) only count
-    # if no specific non-NYC US city is named in the location field. This
-    # prevents "San Francisco, United States" from matching as remote.
+    # Generic US location terms only count when no specific non-NYC city is present,
+    # preventing "San Francisco, United States" from matching as remote.
     has_non_nyc_us = any(c in loc_lower for c in _US_NON_NYC)
-    has_us_generic = (not has_non_nyc_us) and any(r in combined for r in REMOTE_LOCS)
+    has_us_generic = (not has_non_nyc_us) and any(r in loc_lower for r in REMOTE_LOCS)
 
     has_remote = has_explicit_remote or has_us_generic
 
-    if has_remote and has_nyc:
-        return "remote+nyc"
-    if has_remote:
-        return "remote"
-    if has_nyc:
-        return "nyc"
-    # Known non-NYC US city, no remote signal → in-office US, excluded by default.
-    if has_non_nyc_us:
-        return "unknown"
-    # Non-empty location that didn't match US patterns → international.
-    if location.strip():
-        return "international"
+    if has_remote and has_nyc: return "remote+nyc"
+    if has_remote:             return "remote"
+    if has_nyc:                return "nyc"
+    if has_non_nyc_us:         return "unknown"
+    if location.strip():       return "international"
     return "unknown"
 
 
@@ -365,10 +372,11 @@ def _deduped(jobs: list[dict], applied: set[str]) -> list[dict]:
 
 def _make_job(source, company, title, location, url, snippet, date_str,
               full_content=None) -> dict:
-    lc            = _loc_class(location, snippet)
-    years_raw, yc = _parse_years(full_content if full_content is not None else snippet)
-    # Verbatim sentence comes from FULL content so it isn't lost to truncation.
-    years_sentence = _years_sentence(full_content if full_content is not None else snippet)
+    content        = full_content if full_content is not None else snippet
+    lc             = _loc_class(location)
+    years_raw, yc  = _parse_years(content)
+    years_sentence = _years_sentence(content)
+    body_lower     = (title + " " + content).lower()
     return {
         "source":         source,
         "company":        company,
@@ -380,8 +388,8 @@ def _make_job(source, company, title, location, url, snippet, date_str,
         "years_raw":      years_raw,
         "years_context":  yc,
         "years_sentence": years_sentence,
-        "hw_signal":      "YES" if any(kw in (title + " " + (full_content or snippet)).lower() for kw in HARDWARE_SIGNAL) else "",
-        "lang_signal":    "YES" if any(kw in (title + " " + (full_content or snippet)).lower() for kw in LANGUAGE_SIGNAL) else "",
+        "hw_signal":      "YES" if any(kw in body_lower for kw in HARDWARE_SIGNAL) else "",
+        "lang_signal":    "YES" if any(kw in body_lower for kw in LANGUAGE_SIGNAL) else "",
         "applied":        "",
     }
 
@@ -399,7 +407,7 @@ def _fetch(url: str) -> dict | list | None:
 
 def fetch_greenhouse(slug: str) -> list[dict]:
     data = _fetch(f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true")
-    if not data:
+    if not isinstance(data, dict):
         _record("GH", slug, "fail")
         return []
     out = []
@@ -457,7 +465,7 @@ def fetch_lever(slug: str) -> list[dict]:
         location = cats.get("location", "")
         content  = " ".join(_strip_html(li.get("content", "")) for li in j.get("lists", []))
         ts       = j.get("createdAt")
-        date_str = (datetime.datetime.utcfromtimestamp(ts / 1000).isoformat() + "Z") if ts else None
+        date_str = (datetime.datetime.utcfromtimestamp(ts / 1000).isoformat() + "Z") if ts is not None else None
         out.append(_make_job(
             "Lever", slug, title, location,
             j.get("hostedUrl", ""), content[:500],
@@ -501,8 +509,9 @@ def _output(jobs: list[dict], skipped: int = 0):
               "url", "days_old", "years_raw", "years_context", "years_sentence",
               "hw_signal", "lang_signal", "applied"]
     with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
-        csv.DictWriter(f, fieldnames=fields).writeheader()
-        csv.DictWriter(f, fieldnames=fields).writerows(jobs)
+        w = csv.DictWriter(f, fieldnames=fields)
+        w.writeheader()
+        w.writerows(jobs)
     print(f"Saved {len(jobs)} role(s) → {OUTPUT_FILE}")
     print(f"Fill the 'applied' column as you go. Save as {APPLIED_FILE} to dedupe next run.")
 

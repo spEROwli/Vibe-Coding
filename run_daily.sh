@@ -21,40 +21,42 @@ if [ ! -x "$PYTHON" ]; then
   python3 -m venv "$VENV"
   "$VENV/bin/pip" install --quiet google-api-python-client google-auth-oauthlib
 fi
+
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/pmfarm_$(date +%Y%m%d_%H%M%S).log"
 
-{
-  echo "=== pmfarm daily run $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
+# Tee stdout+stderr to log without a pipe subshell — set -e stays effective.
+exec > >(tee "$LOG") 2>&1
 
-  cd "$SCRIPT_DIR"
+echo "=== pmfarm daily run $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
 
-  # 1. Sync applied companies from Gmail (optional).
-  #    Only runs if the OAuth token exists — set up with pmfarm_gmail_sync.py --setup.
-  if [ -f "$HOME/.config/pmfarm/gmail_token.json" ]; then
-    "$PYTHON" pmfarm_gmail_sync.py 2>&1 || echo "  [warn] Gmail sync failed — check token"
-  fi
+cd "$SCRIPT_DIR"
 
-  # 2. Scrape ATS APIs and write pm_roles.csv.
-  python3 pmfarm.py --all-levels
+# 1. Sync applied companies from Gmail (optional).
+#    Only runs if the OAuth token exists — set up with pmfarm_gmail_sync.py --setup.
+if [ -f "$HOME/.config/pmfarm/gmail_token.json" ]; then
+  "$PYTHON" pmfarm_gmail_sync.py || echo "  [warn] Gmail sync failed — check token"
+fi
 
-  # 3. Build HTML dashboard from pm_roles.csv.
-  python3 build_page.py
+# 2. Scrape ATS APIs and write pm_roles.csv.
+"$PYTHON" pmfarm.py --all-levels
 
-  # 4. Publish updated HTML to GitHub Pages.
-  #    Only commits if pm_roles.html actually changed (idempotent).
-  if ! git diff --quiet pm_roles.html 2>/dev/null; then
-    git add pm_roles.html
-    git commit -m "daily update $(date -u +%Y-%m-%d)"
-    git push origin HEAD
-    echo "  [ok] pm_roles.html pushed to GitHub"
-  else
-    echo "  [skip] pm_roles.html unchanged — nothing to push"
-  fi
+# 3. Build HTML dashboard from pm_roles.csv.
+"$PYTHON" build_page.py
 
-  echo "=== done $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
-} | tee "$LOG"
+# 4. Publish updated HTML to GitHub Pages.
+#    Only commits if pm_roles.html actually changed (idempotent).
+if ! git diff --quiet pm_roles.html 2>/dev/null; then
+  git add pm_roles.html
+  git commit -m "daily update $(date -u +%Y-%m-%d)"
+  git push origin HEAD:main
+  echo "  [ok] pm_roles.html pushed to GitHub"
+else
+  echo "  [skip] pm_roles.html unchanged — nothing to push"
+fi
+
+echo "=== done $(date -u +%Y-%m-%dT%H:%M:%SZ) ==="
 
 # Keep only last 14 log files.
 ls -t "$LOG_DIR"/pmfarm_*.log 2>/dev/null | tail -n +15 | xargs rm -f --

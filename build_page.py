@@ -41,11 +41,18 @@ def _load_sector_map() -> dict:
     out = {}
     if not os.path.exists(CACHE):
         return out
-    data = json.load(open(CACHE))
+    try:
+        data = json.load(open(CACHE, encoding="utf-8"))
+    except Exception:
+        return out
+    cand = data.get("candidates", {})
     for key in ("greenhouse", "ashby", "lever", "yc"):
-        for e in data.get(key, []):
-            if isinstance(e, dict) and e.get("slug"):
-                out[e["slug"].lower()] = set(e.get("tags", []))
+        for src in (data.get(key) or [], cand.get(key) or []):
+            for e in src:
+                if isinstance(e, dict) and e.get("slug"):
+                    slug = e["slug"].lower()
+                    tags = set(e.get("tags", []))
+                    out[slug] = out.get(slug, set()) | tags
     return out
 
 
@@ -146,19 +153,21 @@ LOC_PILL = {"nyc": "NYC", "remote+nyc": "NYC · Remote", "remote": "Remote",
 
 
 def _card(row: dict, priority: bool) -> str:
+    loc_raw  = row.get("location", "") or LOC_LABEL.get(row.get("loc_class", ""), "")
     company  = html.escape(row.get("company", "").title())
     title    = html.escape(row.get("title", ""))
-    loc      = html.escape(row.get("location", "") or LOC_LABEL.get(row.get("loc_class", ""), ""))
+    loc      = html.escape(loc_raw)
     years    = html.escape(_years_line(row))
     url      = html.escape(row.get("url", ""), quote=True)
     lc       = row.get("loc_class", "unknown")
     locpill  = LOC_PILL.get(lc, "—")
     is_app   = (row.get("applied", "") or "").strip().lower() in ("y", "yes", "1", "true", "x")
+    has_hw   = row.get("hw_signal") == "YES"
 
     # Pill tags — dense, scannable, McMaster-style.
     tags = [f'<span class="pill pl-{lc}">{html.escape(locpill)}</span>']
     if priority:                         tags.append('<span class="pill pl-pri">★ priority</span>')
-    if row.get("hw_signal") == "YES":    tags.append('<span class="pill pl-hw">🔩 fit</span>')
+    if has_hw:                           tags.append('<span class="pill pl-hw">🔩 fit</span>')
     if row.get("lang_signal") == "YES":  tags.append('<span class="pill pl-lang">🌐 lang</span>')
     tagrow = "".join(tags)
 
@@ -167,9 +176,10 @@ def _card(row: dict, priority: bool) -> str:
     ab       = _age_bucket(row)
     aclass   = ("ag-fresh" if ab == 0 else "ag-recent" if ab == 1 else "ag-stale")
 
-    # data-* attributes power instant client-side filtering (no reload).
-    search   = html.escape((row.get("company", "") + " " + row.get("title", "") + " " + loc).lower(), quote=True)
-    return f"""  <div class="card{' pri' if priority else ''}{' done' if is_app else ''}" data-loc="{lc}" data-age="{ab}" data-pri="{1 if priority else 0}" data-applied="{1 if is_app else 0}" data-search="{search}">
+    # data-search built from raw (un-escaped) values to avoid double-encoding.
+    search   = html.escape((row.get("company", "") + " " + row.get("title", "") + " " + loc_raw).lower(), quote=True)
+    hw_attr  = "1" if has_hw else "0"
+    return f"""  <div class="card{' pri' if priority else ''}{' done' if is_app else ''}" data-loc="{lc}" data-age="{ab}" data-pri="{1 if priority else 0}" data-applied="{1 if is_app else 0}" data-hw="{hw_attr}" data-search="{search}">
     <div class="top">
       <div class="co">{company}</div>
       <span class="ag {aclass}">{age_str}</span>
@@ -201,7 +211,7 @@ def _render_bucket(rows: list) -> str:
             ll = LOC_LABELS.get(lc, lc)
             parts.append(f'  <div class="sec" data-sec="{sec_id}">{al} · {ll}</div>')
             last_key = key
-        parts.append(_card(r, _is_priority(r)).replace('class="card', f'data-sec="{sec_id}" class="card', 1))
+        parts.append(_card(r, _is_priority(r)).replace('<div class="card', f'<div data-sec="{sec_id}" class="card', 1))
     return "\n".join(parts)
 
 
@@ -374,7 +384,7 @@ def build():
       if (ok && locFilters.length) ok = locFilters.some(f => locMatch(card, f));
       if (ok && active.has('fresh'))       ok = card.dataset.age === '0';
       if (ok && active.has('priority'))    ok = card.dataset.pri === '1';
-      if (ok && active.has('fit'))         ok = card.querySelector('.pl-hw') !== null;
+      if (ok && active.has('fit'))         ok = card.dataset.hw === '1';
       if (ok && active.has('hideapplied')) ok = card.dataset.applied === '0';
       card.style.display = ok ? '' : 'none';
       if (ok) shown++;

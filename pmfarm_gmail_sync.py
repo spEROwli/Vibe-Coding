@@ -19,6 +19,7 @@ Docs: https://developers.google.com/gmail/api/quickstart/python
 """
 
 import argparse, json, os, re, sys
+from pmfarm import _normalize_company as _normalize
 
 TOKEN_FILE  = os.path.expanduser("~/.config/pmfarm/gmail_token.json")
 SECRET_FILE = os.path.expanduser("~/.config/pmfarm/client_secret.json")
@@ -66,9 +67,6 @@ def _extract_company(subject: str, sender_domain: str) -> str:
         return parts[-2].capitalize()
     return ""
 
-
-def _normalize(name: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", name.lower())
 
 
 def _load_creds():
