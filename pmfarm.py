@@ -36,9 +36,17 @@ REMOTE_LOCS = ["remote", "united states", "anywhere", "us", "nationwide",
 # Keywords in description that signal the role values engineering background.
 # Surfaced in terminal output as a "signal" flag — not used for filtering.
 HARDWARE_SIGNAL = [
-    "mechanical engineer", "hardware", "medical device", "med device",
+    "mechanical engineer", "hardware", "medical device", "med device", "medtech",
     "regulated", "fda", "iso 13485", "physical product", "manufacturing",
     "embedded", "firmware", "iot", "wearable", "sensor",
+    "diagnostics", "clinical", "life sciences", "life-science", "biomedical",
+    "surgical", "medical imaging", "point-of-care", "in vitro", "pharmaceutical",
+]
+
+LANGUAGE_SIGNAL = [
+    "fluent in spanish", "fluent in french", "spanish speaker", "french speaker",
+    "bilingual", "multilingual", "latam", "latin america", "francophone",
+    "spanish language", "french language", "español", "français",
 ]
 
 # ── COMPANIES ─────────────────────────────────────────────────────────────────
@@ -337,7 +345,8 @@ def _make_job(source, company, title, location, url, snippet, date_str,
         "years_raw":      years_raw,
         "years_context":  yc,
         "years_sentence": years_sentence,
-        "hw_signal":      "YES" if any(kw in (title + " " + snippet).lower() for kw in HARDWARE_SIGNAL) else "",
+        "hw_signal":      "YES" if any(kw in (title + " " + (full_content or snippet)).lower() for kw in HARDWARE_SIGNAL) else "",
+        "lang_signal":    "YES" if any(kw in (title + " " + (full_content or snippet)).lower() for kw in LANGUAGE_SIGNAL) else "",
         "applied":        "",
     }
 
@@ -442,8 +451,9 @@ def _output(jobs: list[dict], skipped: int = 0):
     for j in jobs:
         age = f"{j['days_old']}d" if j["days_old"] != "unknown" else "?d"
         yrs = j["years_raw"] if j["years_raw"] != "unknown" else "?"
-        hw = "  *** HW/MEDTECH SIGNAL ***" if j.get("hw_signal") else ""
-        print(f"[{j['source']:11s}] {j['company']:18s}  {j['title']}{hw}")
+        hw   = "  *** HW/MEDTECH SIGNAL ***" if j.get("hw_signal") else ""
+        lang = "  🌐 LANG" if j.get("lang_signal") else ""
+        print(f"[{j['source']:11s}] {j['company']:18s}  {j['title']}{hw}{lang}")
         print(f"  {(j['location'] or j['loc_class']):32s}  age={age:<6s}  yrs_req={yrs}")
         if j["years_context"]:
             print(f"  \"{j['years_context'][:90]}\"")
@@ -454,7 +464,7 @@ def _output(jobs: list[dict], skipped: int = 0):
 
     fields = ["source", "company", "title", "location", "loc_class",
               "url", "days_old", "years_raw", "years_context", "years_sentence",
-              "hw_signal", "applied"]
+              "hw_signal", "lang_signal", "applied"]
     with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
         csv.DictWriter(f, fieldnames=fields).writeheader()
         csv.DictWriter(f, fieldnames=fields).writerows(jobs)

@@ -30,8 +30,9 @@ CACHE    = "verified_companies.json"
 
 # Sectors where the candidate's hardware/medical-device/regulated background wins.
 PRIORITY_TAGS = {
-    "healthtech", "biotech", "medical", "mental-health", "fintech", "payments",
-    "crypto", "hardware", "iot", "regulated", "govtech", "climate", "compliance",
+    "healthtech", "biotech", "medical", "medtech", "diagnostics", "life-sciences",
+    "mental-health", "fintech", "payments", "crypto", "hardware", "iot",
+    "regulated", "govtech", "climate", "compliance",
 }
 
 
@@ -99,7 +100,7 @@ def _is_priority(row: dict) -> bool:
 
 
 def _loc_rank(lc: str) -> int:
-    return {"nyc": 0, "remote+nyc": 0, "remote": 1, "unknown": 2}.get(lc, 3)
+    return {"nyc": 0, "remote+nyc": 1, "remote": 2, "unknown": 3}.get(lc, 4)
 
 
 def _age(row: dict) -> int:
@@ -147,18 +148,38 @@ def _card(row: dict, priority: bool) -> str:
     years    = html.escape(_years_line(row))
     url      = html.escape(row.get("url", ""), quote=True)
     hw       = ' <span class="flag">🔩 fit</span>' if row.get("hw_signal") == "YES" else ""
+    lang     = ' <span class="flag lang">🌐 lang</span>' if row.get("lang_signal") == "YES" else ""
     star     = ' <span class="flag star">★</span>' if priority else ""
     ystyle   = "ns" if years == "not stated" else "yr"
     age_str  = html.escape(_age_label(row))
     ab       = _age_bucket(row)
     aclass   = ("ag-fresh" if ab == 0 else "ag-recent" if ab == 1 else "ag-stale")
     return f"""  <div class="card{' pri' if priority else ''}">
-    <div class="co">{company}{star}{hw} <span class="ag {aclass}">{age_str}</span></div>
+    <div class="co">{company}{star}{hw}{lang} <span class="ag {aclass}">{age_str}</span></div>
     <div class="ti">{title}</div>
     <div class="lo">📍 {loc}</div>
     <div class="ye {ystyle}">{years}</div>
     <a class="btn" href="{url}">Apply →</a>
   </div>"""
+
+
+def _render_bucket(rows: list) -> str:
+    """Render cards with section dividers between freshness×location groups."""
+    AGE_LABELS = ["🟢 This week", "🟡 1–3 weeks ago", "🔴 3+ weeks ago"]
+    LOC_LABELS = {"nyc": "NYC only", "remote+nyc": "NYC + Remote", "remote": "Remote", "unknown": "Location TBD"}
+    parts = []
+    last_key = None
+    for r in rows:
+        ab  = _age_bucket(r)
+        lc  = r.get("loc_class", "unknown")
+        key = (ab, lc)
+        if key != last_key:
+            al = AGE_LABELS[ab]
+            ll = LOC_LABELS.get(lc, lc)
+            parts.append(f'  <div class="sec">{al} · {ll}</div>')
+            last_key = key
+        parts.append(_card(r, _is_priority(r)))
+    return "\n".join(parts)
 
 
 def build():
@@ -174,8 +195,8 @@ def build():
     bucket_b = sorted((r for r in rows if not _in_range(r)), key=_fit_key)
     pri_count = sum(1 for r in bucket_a if _is_priority(r))
 
-    a_cards = "\n".join(_card(r, _is_priority(r)) for r in bucket_a)
-    b_cards = "\n".join(_card(r, _is_priority(r)) for r in bucket_b)
+    a_cards = _render_bucket(bucket_a)
+    b_cards = _render_bucket(bucket_b)
     today   = datetime.date.today().isoformat()
 
     htmldoc = f"""<!DOCTYPE html>
@@ -205,11 +226,13 @@ def build():
   .ye {{ font-size:12px; line-height:1.4; padding:4px 0; }}
   .ye.yr {{ color:#bf6000; }}
   .ye.ns {{ color:#999; font-style:italic; }}
-  .flag {{ font-size:11px; }} .flag.star {{ color:#007aff; }}
+  .flag {{ font-size:11px; }} .flag.star {{ color:#007aff; }} .flag.lang {{ color:#7c3aed; }}
   .ag {{ font-size:10px; font-weight:600; padding:2px 6px; border-radius:10px; float:right; }}
   .ag-fresh  {{ background:#e8f5e9; color:#2e7d32; }}
   .ag-recent {{ background:#fff8e1; color:#b45309; }}
   .ag-stale  {{ background:#fce4ec; color:#b71c1c; }}
+  .sec {{ font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
+         color:#999; padding:16px 4px 4px; }}
   .btn {{ display:block; text-align:center; background:#007aff; color:#fff; font-size:15px;
          font-weight:600; padding:10px; border-radius:10px; text-decoration:none; margin-top:4px;
          -webkit-tap-highlight-color:transparent; }}
