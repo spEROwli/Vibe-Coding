@@ -5,6 +5,7 @@ Run: python3 test_pmfarm.py
 """
 import csv, io, json, os, sys, tempfile, shutil
 import pmfarm
+import build_page
 
 PASS, FAIL = "PASS", "FAIL"
 results: list[tuple] = []
@@ -532,6 +533,121 @@ def test_10_slug_resolution():
     check("total tracked = 3", len(res), 3)
 
 
+# ── TEST 11: build_page triage contract ──────────────────────────────────────
+
+def _row(company, title, loc_class, years_raw, years_sentence, days_old,
+         hw_signal="", applied=""):
+    return {
+        "source": "Greenhouse", "company": company, "title": title,
+        "location": "", "loc_class": loc_class,
+        "url": f"https://example.com/{company}",
+        "days_old": str(days_old), "years_raw": str(years_raw),
+        "years_context": "", "years_sentence": years_sentence,
+        "hw_signal": hw_signal, "applied": applied,
+    }
+
+
+def test_11_build_page_contract():
+    header(11, "build_page triage contract")
+
+    # Expected bucket-A roles (in-range)
+    row_0yrs  = _row("alpha",   "Associate PM",             "nyc",    0,         "not stated", 1)
+    row_1yr   = _row("beta",    "Product Manager",           "nyc",    1,         "1+ years of PM experience.", 2)
+    row_2yr   = _row("gamma",   "Technical PM",              "remote", 2,         "2+ years required.", 5)
+    row_3yr   = _row("delta",   "Product Manager",           "remote", 3,         "3+ years preferred.", 10)
+    row_unk   = _row("epsilon", "Product Manager",           "nyc",    "unknown", "not stated", 3)
+    row_hedge = _row("zeta",    "Product Manager",           "nyc",    5,         "5+ years preferred or equivalent experience.", 4)
+    # Expected bucket-B roles (out-of-range)
+    row_sen   = _row("eta",     "Senior Product Manager",    "nyc",    3,         "3+ years.", 1)
+    row_4yr   = _row("theta",   "Product Manager",           "nyc",    4,         "4+ years required.", 2)
+    row_staff = _row("iota",    "Staff Product Manager",     "remote", 2,         "2+ years.", 3)
+
+    all_rows = [row_0yrs, row_1yr, row_2yr, row_3yr, row_unk, row_hedge,
+                row_sen, row_4yr, row_staff]
+
+    # ── Bucket A membership ───────────────────────────────────────────────────
+    bucket_a = [r for r in all_rows if build_page._in_range(r)]
+    bucket_b = [r for r in all_rows if not build_page._in_range(r)]
+
+    a_companies = [r["company"] for r in bucket_a]
+    b_companies = [r["company"] for r in bucket_b]
+
+    print(f"  Bucket A ({len(bucket_a)}): {a_companies}")
+    print(f"  Bucket B ({len(bucket_b)}): {b_companies}")
+
+    check("0yr in A",       "alpha"   in a_companies, True)
+    check("1yr in A",       "beta"    in a_companies, True)
+    check("2yr in A",       "gamma"   in a_companies, True)
+    check("3yr in A",       "delta"   in a_companies, True)
+    check("unknown in A",   "epsilon" in a_companies, True)
+    check("hedged 5yr in A","zeta"    in a_companies, True)
+    check("Senior in B",    "eta"     in b_companies, True)
+    check("4yr in B",       "theta"   in b_companies, True)
+    check("Staff in B",     "iota"    in b_companies, True)
+    check("A count = 6",    len(bucket_a), 6)
+    check("B count = 3",    len(bucket_b), 3)
+
+    # ── Sort order (no _parse_years called — uses pre-parsed days_old) ────────
+    sorted_a = sorted(bucket_a, key=build_page._fit_key)
+    sorted_companies = [r["company"] for r in sorted_a]
+    print(f"  Sorted A: {sorted_companies}")
+
+    # NYC non-priority roles come before remote non-priority
+    nyc_roles  = [r["company"] for r in sorted_a if r["loc_class"] == "nyc"]
+    rem_roles  = [r["company"] for r in sorted_a if r["loc_class"] == "remote"]
+    nyc_last   = max(i for i, r in enumerate(sorted_a) if r["loc_class"] == "nyc")
+    rem_first  = min(i for i, r in enumerate(sorted_a) if r["loc_class"] == "remote")
+    check("NYC ranks before remote", nyc_last < rem_first
+          or all(build_page._fit_key(n)[0] == 0 for n in bucket_a
+                 if n["loc_class"] == "nyc"), True)
+
+    # Within same loc_class, older role (larger days_old) sorts later
+    nyc_sorted = [r for r in sorted_a if r["loc_class"] == "nyc"]
+    ages_nyc   = [int(r["days_old"]) for r in nyc_sorted]
+    check("NYC within-class sorted by age asc", ages_nyc, sorted(ages_nyc))
+
+    # ── years_line comes from years_sentence verbatim (no re-parsing) ─────────
+    sent = "3+ years preferred."
+    yl   = build_page._years_line({"years_sentence": sent})
+    check("years_line = verbatim sentence",    yl, sent)
+    check("not-stated row shows 'not stated'", build_page._years_line({"years_sentence": "not stated"}), "not stated")
+    check("empty sentence → 'not stated'",     build_page._years_line({}), "not stated")
+
+    # ── sort key never calls _parse_years ─────────────────────────────────────
+    import unittest.mock
+    with unittest.mock.patch("build_page._years_num") as mock_yn:
+        _ = build_page._fit_key(row_2yr)
+    check("_fit_key does not call _years_num", mock_yn.call_count, 0)
+
+    # ── HTML round-trip: build() with these rows produces valid HTML ──────────
+    fd, tmp_csv = tempfile.mkstemp(suffix=".csv")
+    fd2, tmp_html = tempfile.mkstemp(suffix=".html")
+    os.close(fd); os.close(fd2)
+    try:
+        fields = ["source","company","title","location","loc_class","url","days_old",
+                  "years_raw","years_context","years_sentence","hw_signal","applied"]
+        with open(tmp_csv, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fields)
+            w.writeheader()
+            w.writerows(all_rows)
+        orig_in  = build_page.CSV_IN
+        orig_out = build_page.HTML_OUT
+        build_page.CSV_IN  = tmp_csv
+        build_page.HTML_OUT = tmp_html
+        try:
+            build_page.build()
+        finally:
+            build_page.CSV_IN  = orig_in
+            build_page.HTML_OUT = orig_out
+        html_content = open(tmp_html, encoding="utf-8").read()
+        check("HTML contains Bucket A companies", "Alpha" in html_content, True)
+        check("HTML contains 'not stated' for hedged/unknown", "not stated" in html_content, True)
+        check("HTML contains verbatim years sentence", "3+ years preferred." in html_content, True)
+    finally:
+        os.remove(tmp_csv)
+        os.remove(tmp_html)
+
+
 # ── run all ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -545,6 +661,7 @@ if __name__ == "__main__":
     test_8_honest_limits()
     test_9_gmail_dedupe()
     test_10_slug_resolution()
+    test_11_build_page_contract()
 
     n_fail = sum(1 for r in results if r[0] == FAIL)
     print(f"\n{'═'*68}")
