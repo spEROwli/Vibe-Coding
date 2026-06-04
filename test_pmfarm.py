@@ -317,6 +317,97 @@ def test_8_honest_limits():
     check("no-experience → unknown not zero", raw, "unknown")
 
 
+# ── TEST 9: Gmail company-level dedupe ───────────────────────────────────────
+
+def test_9_gmail_dedupe():
+    header(9, "Gmail company-level dedupe")
+
+    gmail_content = "\n".join([
+        "# test fixture",
+        "Harvey\tThank You for Applying to Harvey\t2026-06-01",
+        "Betterment\tThank you for applying to Betterment!\t2026-06-01",
+        "Oscar\tThank you for applying to Oscar!\t2026-06-01",
+        "Robinhood\tThank you for applying to Robinhood\t2026-06-01",
+        "21Shares\tThank you for applying to 21Shares\t2026-06-01",
+        "DoorDash\tThank you for applying to DoorDash\t2026-06-01",
+        "Stripe\tThanks for applying to Stripe!\t2026-06-01",
+        "Scale AI\tThank you for applying to Scale AI\t2026-05-02",
+        "FanDuel\tThank you for applying to FanDuel\t2026-06-03",
+    ])
+
+    fd, path = tempfile.mkstemp(suffix=".txt")
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(gmail_content)
+
+    orig_gf = pmfarm.GMAIL_FILE
+    pmfarm.GMAIL_FILE = path
+    try:
+        gmail_set, evidence = pmfarm._gmail_applied_set()
+
+        # --- normalization correctness ---
+        print(f"  gmail_set ({len(gmail_set)}): {sorted(gmail_set)}")
+        check("normalize FanDuel",  pmfarm._normalize_company("FanDuel"),  "fanduel")
+        check("normalize Scale AI", pmfarm._normalize_company("Scale AI"), "scaleai")
+        check("normalize scale-ai", pmfarm._normalize_company("scale-ai"), "scaleai")  # slug → same
+        check("normalize 21Shares", pmfarm._normalize_company("21Shares"), "21shares")
+        check("set size", len(gmail_set), 9)
+
+        # --- roles that SHOULD be dropped ---
+        should_skip = [
+            {"company": "harvey",     "title": "Innovation PM",     "url": "https://jobs.ashbyhq.com/harvey/1"},
+            {"company": "betterment", "title": "PM User Trust",     "url": "https://boards.greenhouse.io/betterment/1"},
+            {"company": "stripe",     "title": "PM Startup",        "url": "https://boards.greenhouse.io/stripe/2"},
+            {"company": "oscar",      "title": "PM Network",        "url": "https://boards.greenhouse.io/oscar/3"},
+            {"company": "scale-ai",   "title": "PM Core",           "url": "https://jobs.ashbyhq.com/scale-ai/4"},
+            {"company": "fanduel",    "title": "PM Sportsbook",     "url": "https://boards.greenhouse.io/fanduel/5"},
+        ]
+        # --- roles that SHOULD survive ---
+        should_keep = [
+            {"company": "anthropic",  "title": "PM Consumer",       "url": "https://jobs.ashbyhq.com/anthropic/6"},
+            {"company": "cursor",     "title": "PM Core",           "url": "https://jobs.ashbyhq.com/cursor/7"},
+        ]
+
+        skipped, kept = [], []
+        for j in should_skip + should_keep:
+            if pmfarm._normalize_company(j["company"]) in gmail_set:
+                skipped.append(j)
+            else:
+                kept.append(j)
+
+        print(f"\n  Roles skipped by Gmail dedupe: {len(skipped)}")
+        for j in skipped:
+            print(f"    {j['company']:<20s} {j['title']}")
+        print(f"  Roles kept: {len(kept)}")
+        for j in kept:
+            print(f"    {j['company']:<20s} {j['title']}")
+
+        check("should_skip: all 6 dropped",  len(skipped), 6)
+        check("should_keep: all 2 kept",     len(kept),    2)
+        check("anthropic not dropped",       should_keep[0] in kept, True)
+        check("cursor not dropped",          should_keep[1] in kept, True)
+
+        # --- required-companies assertion (from CODE_DIRECTIVES) ---
+        required_raw = ["Harvey", "Betterment", "Oscar", "Robinhood",
+                        "21Shares", "DoorDash", "Stripe"]
+        required_norm = {pmfarm._normalize_company(c) for c in required_raw}
+        missing = required_norm - gmail_set
+        print(f"\n  Required companies assertion: missing={missing or 'none'}")
+        check("all CODE_DIRECTIVES required companies in set", len(missing), 0)
+
+    finally:
+        pmfarm.GMAIL_FILE = orig_gf
+        os.remove(path)
+
+    # --- missing gmail_applied.txt → empty set, no crash ---
+    orig_gf = pmfarm.GMAIL_FILE
+    pmfarm.GMAIL_FILE = "/tmp/no_such_gmail_applied.txt"
+    try:
+        gset, _ = pmfarm._gmail_applied_set()
+        check("missing gmail file → empty set", gset, set())
+    finally:
+        pmfarm.GMAIL_FILE = orig_gf
+
+
 # ── run all ───────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -328,6 +419,7 @@ if __name__ == "__main__":
     test_6_dead_slug()
     test_7_idempotency()
     test_8_honest_limits()
+    test_9_gmail_dedupe()
 
     n_fail = sum(1 for r in results if r[0] == FAIL)
     print(f"\n{'═'*68}")

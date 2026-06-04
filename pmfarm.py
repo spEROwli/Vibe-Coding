@@ -143,6 +143,7 @@ YEARS_DISQUALIFY = ["combined", "collective", "total", "company-wide", "across o
 CHUNK        = 8
 NEG          = ' -"senior" -"staff" -"principal" -"director" -"lead"'
 APPLIED_FILE = "applied.csv"
+GMAIL_FILE   = "gmail_applied.txt"  # synced by pmfarm_gmail_sync.py; one company per line
 OUTPUT_FILE  = "pm_roles.csv"
 
 
@@ -265,6 +266,39 @@ def _passes_location(lc: str, remote_only: bool) -> bool:
 
 def _ct_key(company: str, title: str) -> str:
     return f"{company.strip().lower()}|{title.strip().lower()}"
+
+
+def _normalize_company(name: str) -> str:
+    """Lowercase + strip all non-alphanumeric chars for Gmail company matching.
+    'FanDuel' → 'fanduel'; 'Scale AI' → 'scaleai'; 'scale-ai' (slug) → 'scaleai'.
+    Known false negative: 'CLEAR' → 'clear' ≠ slug 'clearme' (add to applied.csv manually)."""
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
+def _gmail_applied_set() -> tuple[set[str], list[tuple]]:
+    """Read gmail_applied.txt. Returns (normalized_company_set, evidence_list).
+    Each evidence entry: (normalized_name, raw_name, subject_line, date_str).
+    Silently returns empty set if the file is absent (Gmail dedupe disabled)."""
+    companies: set[str] = set()
+    evidence:  list[tuple] = []
+    try:
+        with open(GMAIL_FILE, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split("\t", 2)
+                raw  = parts[0].strip()
+                subj = parts[1].strip() if len(parts) > 1 else ""
+                date = parts[2].strip() if len(parts) > 2 else ""
+                norm = _normalize_company(raw)
+                if norm:
+                    companies.add(norm)
+                    evidence.append((norm, raw, subj, date))
+    except FileNotFoundError:
+        print(f"  ℹ  {GMAIL_FILE} not found — Gmail dedupe disabled. "
+              "Run: python3 pmfarm_gmail_sync.py", file=sys.stderr)
+    return companies, evidence
 
 
 def _load_applied() -> set[str]:
@@ -492,6 +526,16 @@ def cmd_process(path: str, remote_only: bool):
 # ── local mode ────────────────────────────────────────────────────────────────
 
 def cmd_local(remote_only: bool):
+    # ── Gmail company-level dedupe (primary source of truth) ──────────────────
+    gmail_set, gmail_evidence = _gmail_applied_set()
+    print(f"\nGmail applied set: {len(gmail_set)} companies")
+    if gmail_set:
+        for norm, raw, subj, date in sorted(gmail_evidence, key=lambda x: x[0]):
+            print(f"  {raw:<28s} ← \"{subj[:55]}\"  ({date[:10]})")
+    else:
+        print("  (none — run python3 pmfarm_gmail_sync.py to enable)")
+
+    # ── ATS fetch ─────────────────────────────────────────────────────────────
     tasks = ([(fetch_greenhouse, s) for s in GREENHOUSE] +
              [(fetch_ashby,      s) for s in ASHBY] +
              [(fetch_lever,      s) for s in LEVER])
@@ -509,13 +553,44 @@ def cmd_local(remote_only: bool):
             except Exception as e:
                 print(f"  {fn_name}({slug}) error: {e}", file=sys.stderr)
 
+    # ── location filter ───────────────────────────────────────────────────────
     filtered = [j for j in raw if _passes_location(j["loc_class"], remote_only)]
-    applied  = _load_applied()
-    pre      = len(filtered)
-    jobs     = _deduped(filtered, applied)
-    skipped  = pre - len(jobs)
-    print(f"\n{len(raw)} title-matched → {len(filtered)} after location → {len(jobs)} after dedupe")
-    _output(jobs, skipped)
+
+    # ── applied.csv URL/name dedupe (fallback, manual) ────────────────────────
+    applied = _load_applied()
+    pre_url = len(filtered)
+    url_deduped = _deduped(filtered, applied)
+    skipped_url = pre_url - len(url_deduped)
+
+    # ── Gmail company-level dedupe ────────────────────────────────────────────
+    gmail_skipped: list[tuple] = []
+    jobs: list[dict] = []
+    if gmail_set:
+        for j in url_deduped:
+            norm = _normalize_company(j["company"])
+            if norm in gmail_set:
+                ev = next((e for e in gmail_evidence if e[0] == norm), None)
+                gmail_skipped.append((j, ev))
+            else:
+                jobs.append(j)
+    else:
+        jobs = url_deduped
+
+    if gmail_skipped:
+        print(f"\nRoles skipped by Gmail dedupe: {len(gmail_skipped)}")
+        for j, ev in gmail_skipped[:10]:
+            ev_str = (f"\"{ev[2][:50]}\" ({ev[3][:10]})" if ev
+                      else f"\"{j['company']}\" matched")
+            print(f"  {j['company']:<24s} {j['title'][:45]}")
+            print(f"    ← {ev_str}")
+        if len(gmail_skipped) > 10:
+            print(f"  … and {len(gmail_skipped) - 10} more")
+
+    print(f"\n{len(raw)} title-matched → {len(filtered)} after location "
+          f"→ {len(url_deduped)} after URL-dedupe → {len(jobs)} after Gmail-dedupe")
+    if skipped_url:
+        print(f"(also skipped {skipped_url} by applied.csv URL/name match)")
+    _output(jobs, 0)
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
