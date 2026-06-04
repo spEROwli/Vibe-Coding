@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.pmfarm.daily</string>
+
+  <!-- Absolute path to run_daily.sh — edit if repo is not in ~/Vibe-Coding -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/YOUR_USERNAME/Vibe-Coding/run_daily.sh</string>
+  </array>
+
+  <!-- Run at 07:30 local time every day -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>7</integer>
+    <key>Minute</key>
+    <integer>30</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/YOUR_USERNAME/Vibe-Coding/logs/launchd_stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOUR_USERNAME/Vibe-Coding/logs/launchd_stderr.log</string>
+
+  <!-- Run immediately on load if the last scheduled run was missed -->
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>
