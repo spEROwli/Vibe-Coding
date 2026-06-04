@@ -12,6 +12,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV="$HOME/.venv/pmfarm"
+PYTHON="${VENV}/bin/python3"
+
+# Bootstrap venv on first run if it doesn't exist yet.
+if [ ! -x "$PYTHON" ]; then
+  echo "  [setup] creating venv at $VENV"
+  python3 -m venv "$VENV"
+  "$VENV/bin/pip" install --quiet google-api-python-client google-auth-oauthlib
+fi
 LOG_DIR="$SCRIPT_DIR/logs"
 mkdir -p "$LOG_DIR"
 LOG="$LOG_DIR/pmfarm_$(date +%Y%m%d_%H%M%S).log"
@@ -23,7 +32,7 @@ LOG="$LOG_DIR/pmfarm_$(date +%Y%m%d_%H%M%S).log"
 
   # 1. Sync applied companies from Gmail (requires prior --setup).
   #    Fails silently if token is missing — applied.csv still dedupes.
-  python3 pmfarm_gmail_sync.py 2>&1 || echo "  [warn] Gmail sync skipped (token missing?)"
+  "$PYTHON" pmfarm_gmail_sync.py 2>&1 || echo "  [warn] Gmail sync skipped (token missing?)"
 
   # 2. Scrape ATS APIs and write pm_roles.csv.
   python3 pmfarm.py --all-levels
