@@ -1,0 +1,55 @@
+=== pmfarm daily run 2026-06-04T00:39:19Z ===
+Missing deps. Run: pip3 install google-api-python-client google-auth-oauthlib
+  [warn] Gmail sync skipped (token missing?)
+
+Gmail applied set: 38 companies
+  21Shares                     ← "Thank you for applying to 21Shares"  (2026-06-01)
+  American Express             ← "Thank you for applying to American Express"  (2026-05-19)
+  Anthropic                    ← "Thank you for applying to Anthropic"  (2026-04-23)
+  Arc                          ← "Thank You for Applying to Arc!"  (2026-05-21)
+  Betterment                   ← "Thank you for applying to Betterment!"  (2026-06-01)
+  CLEAR                        ← "Thank You For Applying to CLEAR"  (2026-05-29)
+  Cloudflare                   ← "Cloudflare Recruiting | Application Received"  (2026-04-23)
+  DoorDash                     ← "Thank you for applying to DoorDash"  (2026-06-01)
+  EliseAI                      ← "Thanks for applying to EliseAI!"  (2026-05-06)
+  Eulerity                     ← "Thank you for applying to Eulerity"  (2026-05-29)
+  ExaCare                      ← "Thank you for applying to ExaCare Inc"  (2026-05-02)
+  FanDuel                      ← "Thank you for applying to FanDuel"  (2026-06-03)
+  Figure                       ← "Thank you for applying to Figure"  (2026-04-20)
+  Fora                         ← "Thank you for applying to Fora"  (2026-04-23)
+  Glean                        ← "Thank you for applying to Glean"  (2026-04-23)
+  Google                       ← "Thanks for applying to Google"  (2026-05-06)
+  Granted                      ← "Granted | We've Received Your Application"  (2026-04-20)
+  Harry's                      ← "Thank you for applying to Harry's"  (2026-05-18)
+  Harvey                       ← "Thank You for Applying to Harvey"  (2026-06-01)
+  Heron Data                   ← "Heron Data - Application Received!"  (2026-05-28)
+  Jane Street                  ← "Thank you for applying to Jane Street"  (2026-05-22)
+  Jerry.ai                     ← "We received your application for Associate Product Mana"  (2026-05-07)
+  Justworks                    ← "Thank you for applying to Justworks"  (2026-04-22)
+  Kira                         ← "Kira - Product Manager - Application Received"  (2026-05-29)
+  MongoDB                      ← "Thank you for applying to MongoDB"  (2026-04-22)
+  Nanotronics Imaging          ← "Thank you for applying!"  (2026-04-20)
+  Oscar                        ← "Thank you for applying to Oscar!"  (2026-06-01)
+  Peloton                      ← "Peloton | We've Received Your Application"  (2026-05-21)
+  Rho                          ← "Thank you for applying to Rho"  (2026-05-02)
+  Robinhood                    ← "Thank you for applying to Robinhood"  (2026-06-01)
+  Roku                         ← "Thank you for applying to Roku"  (2026-06-03)
+  Scale AI                     ← "Thank you for applying to Scale AI"  (2026-05-02)
+  Standard Bots                ← "Standard Bots - Application Received!"  (2026-05-03)
+  Stripe                       ← "Thanks for applying to Stripe!"  (2026-06-01)
+  Trumid                       ← "Thank you for applying to Trumid"  (2026-06-03)
+  Tuesday Lab                  ← "Thanks for applying to Tuesday!"  (2026-05-28)
+  Viam                         ← "Thank you for applying to Viam"  (2026-04-20)
+  Zip                          ← "Thank you for applying to Zip!"  (2026-05-21)
+
+0 title-matched → 0 after location (NYC=0 remote=0 excluded-unknown=0) → 0 after URL-dedupe → 0 after Gmail-dedupe
+
+Slug hit-rate: 0/247 with PM roles | 0 resolved-empty | 247 failed (404/timeout)
+  Failed slugs: Ashby:abnormal, Ashby:airwallex, Ashby:alchemy, Ashby:anthropic, Ashby:anyscale, Ashby:arc, Ashby:baseten, Ashby:brigit, Ashby:browserbase, Ashby:candid-health, Ashby:causal, Ashby:census, Ashby:chainguard, Ashby:clay, Ashby:coda-hq, Ashby:cognition, Ashby:cohere, Ashby:crusoe, Ashby:cursor, Ashby:dbt-labs … +227 more
+
+────────────────────────────────────────────────────────────────────────
+Saved 0 role(s) → pm_roles.csv
+Fill the 'applied' column as you go. Save as applied.csv to dedupe next run.
+Wrote pm_roles.html: 0 in-range (0 priority) + 0 stretch = 0 total
+Open it: open pm_roles.html
+=== done 2026-06-04T00:39:28Z ===
