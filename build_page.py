@@ -141,45 +141,67 @@ def _age_label(row: dict) -> str:
     return f"{a}d ago"
 
 
+LOC_PILL = {"nyc": "NYC", "remote+nyc": "NYC · Remote", "remote": "Remote",
+            "international": "Intl", "unknown": "—"}
+
+
 def _card(row: dict, priority: bool) -> str:
     company  = html.escape(row.get("company", "").title())
     title    = html.escape(row.get("title", ""))
     loc      = html.escape(row.get("location", "") or LOC_LABEL.get(row.get("loc_class", ""), ""))
     years    = html.escape(_years_line(row))
     url      = html.escape(row.get("url", ""), quote=True)
-    hw       = ' <span class="flag">🔩 fit</span>' if row.get("hw_signal") == "YES" else ""
-    lang     = ' <span class="flag lang">🌐 lang</span>' if row.get("lang_signal") == "YES" else ""
-    star     = ' <span class="flag star">★</span>' if priority else ""
+    lc       = row.get("loc_class", "unknown")
+    locpill  = LOC_PILL.get(lc, "—")
+    is_app   = (row.get("applied", "") or "").strip().lower() in ("y", "yes", "1", "true", "x")
+
+    # Pill tags — dense, scannable, McMaster-style.
+    tags = [f'<span class="pill pl-{lc}">{html.escape(locpill)}</span>']
+    if priority:                         tags.append('<span class="pill pl-pri">★ priority</span>')
+    if row.get("hw_signal") == "YES":    tags.append('<span class="pill pl-hw">🔩 fit</span>')
+    if row.get("lang_signal") == "YES":  tags.append('<span class="pill pl-lang">🌐 lang</span>')
+    tagrow = "".join(tags)
+
     ystyle   = "ns" if years == "not stated" else "yr"
     age_str  = html.escape(_age_label(row))
     ab       = _age_bucket(row)
     aclass   = ("ag-fresh" if ab == 0 else "ag-recent" if ab == 1 else "ag-stale")
-    return f"""  <div class="card{' pri' if priority else ''}">
-    <div class="co">{company}{star}{hw}{lang} <span class="ag {aclass}">{age_str}</span></div>
+
+    # data-* attributes power instant client-side filtering (no reload).
+    search   = html.escape((row.get("company", "") + " " + row.get("title", "") + " " + loc).lower(), quote=True)
+    return f"""  <div class="card{' pri' if priority else ''}{' done' if is_app else ''}" data-loc="{lc}" data-age="{ab}" data-pri="{1 if priority else 0}" data-applied="{1 if is_app else 0}" data-search="{search}">
+    <div class="top">
+      <div class="co">{company}</div>
+      <span class="ag {aclass}">{age_str}</span>
+    </div>
     <div class="ti">{title}</div>
     <div class="lo">📍 {loc}</div>
+    <div class="tags">{tagrow}</div>
     <div class="ye {ystyle}">{years}</div>
-    <a class="btn" href="{url}">Apply →</a>
+    <a class="btn" href="{url}" target="_blank" rel="noopener">Apply →</a>
   </div>"""
 
 
 def _render_bucket(rows: list) -> str:
-    """Render cards with section dividers between freshness×location groups."""
+    """Render cards with section dividers between freshness×location groups.
+    Dividers carry data-sec so JS can hide a heading when all its cards filter out."""
     AGE_LABELS = ["🟢 This week", "🟡 1–3 weeks ago", "🔴 3+ weeks ago"]
     LOC_LABELS = {"nyc": "NYC only", "remote+nyc": "NYC + Remote", "remote": "Remote",
                   "international": "International", "unknown": "Location TBD"}
     parts = []
     last_key = None
+    sec_id = 0
     for r in rows:
         ab  = _age_bucket(r)
         lc  = r.get("loc_class", "unknown")
         key = (ab, lc)
         if key != last_key:
+            sec_id += 1
             al = AGE_LABELS[ab]
             ll = LOC_LABELS.get(lc, lc)
-            parts.append(f'  <div class="sec">{al} · {ll}</div>')
+            parts.append(f'  <div class="sec" data-sec="{sec_id}">{al} · {ll}</div>')
             last_key = key
-        parts.append(_card(r, _is_priority(r)))
+        parts.append(_card(r, _is_priority(r)).replace('class="card', f'data-sec="{sec_id}" class="card', 1))
     return "\n".join(parts)
 
 
@@ -206,62 +228,178 @@ def build():
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>PM Roles — {today}</title>
 <style>
-  * {{ box-sizing:border-box; margin:0; padding:0; }}
-  body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-         background:#f0f2f5; color:#1a1a1a; padding:12px; }}
-  h1 {{ font-size:19px; padding:8px 4px 2px; }}
-  .sub {{ font-size:13px; color:#666; padding:0 4px 10px; }}
-  .manifest {{ font-size:11px; color:#2e5d34; background:#e8f5e9;
-              border-left:3px solid #34c759; padding:8px 10px; border-radius:6px;
-              margin-bottom:14px; line-height:1.5; }}
-  .lbl {{ font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
-         color:#888; padding:18px 4px 6px; }}
-  .card {{ background:#fff; border-radius:14px; padding:13px 15px; margin-bottom:9px;
-          box-shadow:0 1px 3px rgba(0,0,0,.07); display:flex; flex-direction:column; gap:4px;
-          border-left:4px solid #c7c7cc; }}
-  .card.pri {{ border-left-color:#007aff; }}
-  .co {{ font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
-        color:#555; }}
-  .ti {{ font-size:16px; font-weight:600; line-height:1.25; }}
-  .lo {{ font-size:13px; color:#0066cc; }}
-  .ye {{ font-size:12px; line-height:1.4; padding:4px 0; }}
-  .ye.yr {{ color:#bf6000; }}
-  .ye.ns {{ color:#999; font-style:italic; }}
-  .flag {{ font-size:11px; }} .flag.star {{ color:#007aff; }} .flag.lang {{ color:#7c3aed; }}
-  .ag {{ font-size:10px; font-weight:600; padding:2px 6px; border-radius:10px; float:right; }}
-  .ag-fresh  {{ background:#e8f5e9; color:#2e7d32; }}
-  .ag-recent {{ background:#fff8e1; color:#b45309; }}
-  .ag-stale  {{ background:#fce4ec; color:#b71c1c; }}
-  .sec {{ font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase;
-         color:#999; padding:16px 4px 4px; }}
-  .btn {{ display:block; text-align:center; background:#007aff; color:#fff; font-size:15px;
-         font-weight:600; padding:10px; border-radius:10px; text-decoration:none; margin-top:4px;
-         -webkit-tap-highlight-color:transparent; }}
-  .btn:active {{ opacity:.8; }}
-  details {{ margin-top:8px; }}
-  summary {{ font-size:14px; font-weight:600; color:#444; padding:10px; background:#fff;
-            border-radius:10px; cursor:pointer; }}
+  :root {{
+    --bg:#fafafa; --card:#fff; --ink:#18181b; --muted:#71717a; --line:#e4e4e7;
+    --accent:#2563eb; --accent-soft:#eff6ff;
+  }}
+  * {{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }}
+  body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
+         background:var(--bg); color:var(--ink); font-size:14px; line-height:1.4; }}
+
+  /* ── Sticky header: title, counts, search, filter chips ── */
+  header {{ position:sticky; top:0; z-index:20; background:rgba(250,250,250,.92);
+           backdrop-filter:saturate(180%) blur(12px); border-bottom:1px solid var(--line);
+           padding:10px 14px 8px; }}
+  .htop {{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }}
+  h1 {{ font-size:17px; font-weight:700; letter-spacing:-.01em; }}
+  .count {{ font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }}
+  .search {{ width:100%; margin-top:8px; padding:9px 12px; font-size:15px;
+            border:1px solid var(--line); border-radius:10px; background:#fff; outline:none; }}
+  .search:focus {{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }}
+  .chips {{ display:flex; gap:6px; margin-top:8px; overflow-x:auto; padding-bottom:2px;
+           scrollbar-width:none; }}
+  .chips::-webkit-scrollbar {{ display:none; }}
+  .chip {{ flex:0 0 auto; font-size:12px; font-weight:600; padding:6px 11px; border-radius:999px;
+          border:1px solid var(--line); background:#fff; color:var(--muted); cursor:pointer;
+          white-space:nowrap; user-select:none; transition:.12s; }}
+  .chip[aria-pressed="true"] {{ background:var(--accent); color:#fff; border-color:var(--accent); }}
+
+  main {{ padding:6px 14px 60px; max-width:680px; margin:0 auto; }}
+
+  /* ── Cards ── */
+  .card {{ background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:13px 14px; margin-bottom:8px; display:flex; flex-direction:column; gap:5px;
+          border-left:3px solid var(--line); }}
+  .card.pri {{ border-left-color:var(--accent); }}
+  .card.done {{ opacity:.5; }}
+  .card.done .btn {{ background:#a1a1aa; }}
+  .top {{ display:flex; align-items:center; justify-content:space-between; gap:8px; }}
+  .co {{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+        color:var(--muted); }}
+  .ti {{ font-size:16px; font-weight:650; line-height:1.25; letter-spacing:-.01em; }}
+  .lo {{ font-size:13px; color:var(--muted); }}
+  .ye {{ font-size:12.5px; line-height:1.45; padding:2px 0; }}
+  .ye.yr {{ color:#b45309; }}
+  .ye.ns {{ color:#a1a1aa; font-style:italic; }}
+
+  /* ── Pill tags ── */
+  .tags {{ display:flex; flex-wrap:wrap; gap:5px; }}
+  .pill {{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px;
+          background:#f4f4f5; color:#52525b; }}
+  .pl-nyc {{ background:#eff6ff; color:#1d4ed8; }}
+  .pl-remote {{ background:#f0fdf4; color:#15803d; }}
+  .pl-remote\\+nyc {{ background:#eef2ff; color:#4338ca; }}
+  .pl-international {{ background:#fdf4ff; color:#a21caf; }}
+  .pl-pri {{ background:#eff6ff; color:#1d4ed8; }}
+  .pl-hw {{ background:#fff7ed; color:#c2410c; }}
+  .pl-lang {{ background:#faf5ff; color:#7c3aed; }}
+
+  .ag {{ font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; flex:0 0 auto; }}
+  .ag-fresh  {{ background:#dcfce7; color:#15803d; }}
+  .ag-recent {{ background:#fef9c3; color:#a16207; }}
+  .ag-stale  {{ background:#fee2e2; color:#b91c1c; }}
+
+  .sec {{ font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+         color:#a1a1aa; padding:16px 2px 5px; }}
+
+  .btn {{ display:block; text-align:center; background:var(--accent); color:#fff; font-size:14px;
+         font-weight:650; padding:9px; border-radius:9px; text-decoration:none; margin-top:3px; }}
+  .btn:active {{ opacity:.85; }}
+
+  .lbl {{ font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
+         color:#a1a1aa; padding:14px 2px 8px; }}
+  .empty {{ text-align:center; color:var(--muted); padding:40px 0; font-size:14px; display:none; }}
+  details {{ margin-top:14px; }}
+  summary {{ font-size:13px; font-weight:650; color:#52525b; padding:11px 13px; background:#fff;
+            border:1px solid var(--line); border-radius:10px; cursor:pointer; list-style:none; }}
+  summary::-webkit-details-marker {{ display:none; }}
+  .manifest {{ font-size:11px; color:var(--muted); padding:12px 2px 0; line-height:1.55; }}
 </style></head><body>
 
-<h1>PM Roles</h1>
-<div class="sub">{today} · {len(bucket_a)} in-range · {len(bucket_b)} stretch (collapsed)</div>
+<header>
+  <div class="htop">
+    <h1>PM Roles</h1>
+    <span class="count" id="count">{len(bucket_a)} shown</span>
+  </div>
+  <input class="search" id="q" type="search" placeholder="Search company, title, location…" autocomplete="off">
+  <div class="chips" id="chips">
+    <button class="chip" data-f="nyc"      aria-pressed="false">NYC</button>
+    <button class="chip" data-f="remote"   aria-pressed="false">Remote</button>
+    <button class="chip" data-f="intl"     aria-pressed="false">Intl</button>
+    <button class="chip" data-f="fresh"    aria-pressed="false">🟢 This week</button>
+    <button class="chip" data-f="priority" aria-pressed="false">★ Priority</button>
+    <button class="chip" data-f="fit"      aria-pressed="false">🔩 Fit</button>
+    <button class="chip" data-f="hideapplied" aria-pressed="false">Hide applied</button>
+  </div>
+</header>
 
-<div class="manifest">
-  <strong>{len(rows)} roles</strong> from live ATS JSON · {len(bucket_a)} in-range
-  ({pri_count} ★ priority-sector) · {len(bucket_b)} stretch.<br>
-  ★ = healthtech / fintech / regulated / hardware-IoT / founding · 🔩 = hardware-background fit.<br>
-  Every role traces to a live API call. Titles, locations, and the verbatim years
-  sentence are copied from the JD — none inferred or invented.
-</div>
-
-<div class="lbl">✅ In Range — IC level, ≤3 yrs or not stated · sorted fresh→recent→stale, then fit</div>
+<main>
+  <div class="lbl">In range · IC level · ≤3 yrs or not stated · fresh → fit</div>
+  <div id="alist">
 {a_cards}
+  </div>
+  <div class="empty" id="empty">No roles match these filters.</div>
 
-<details>
-  <summary>▸ Stretch bucket — senior / 4+ yrs ({len(bucket_b)} roles)</summary>
+  <details>
+    <summary>▸ Stretch bucket — senior / 4+ yrs ({len(bucket_b)} roles)</summary>
+    <div id="blist">
 {b_cards}
-</details>
+    </div>
+  </details>
 
+  <div class="manifest">
+    {len(rows)} roles from live ATS JSON · {len(bucket_a)} in-range ({pri_count} ★) · {len(bucket_b)} stretch.
+    Every role traces to a live API call; titles, locations, and the years sentence are copied
+    verbatim from the JD — none inferred. Synced {today}.
+  </div>
+</main>
+
+<script>
+(function() {{
+  const q      = document.getElementById('q');
+  const chips  = [...document.querySelectorAll('.chip')];
+  const cards  = [...document.querySelectorAll('#alist .card')];
+  const secs   = [...document.querySelectorAll('#alist .sec')];
+  const count  = document.getElementById('count');
+  const empty  = document.getElementById('empty');
+  const active = new Set();
+
+  function locMatch(card, f) {{
+    const lc = card.dataset.loc;
+    if (f === 'nyc')    return lc === 'nyc' || lc === 'remote+nyc';
+    if (f === 'remote') return lc === 'remote' || lc === 'remote+nyc';
+    if (f === 'intl')   return lc === 'international';
+    return true;
+  }}
+
+  function apply() {{
+    const term = q.value.trim().toLowerCase();
+    // Location chips are OR'd together; other chips are AND constraints.
+    const locFilters = [...active].filter(f => ['nyc','remote','intl'].includes(f));
+    let shown = 0;
+
+    cards.forEach(card => {{
+      let ok = true;
+      if (term && !card.dataset.search.includes(term)) ok = false;
+      if (ok && locFilters.length) ok = locFilters.some(f => locMatch(card, f));
+      if (ok && active.has('fresh'))       ok = card.dataset.age === '0';
+      if (ok && active.has('priority'))    ok = card.dataset.pri === '1';
+      if (ok && active.has('fit'))         ok = card.querySelector('.pl-hw') !== null;
+      if (ok && active.has('hideapplied')) ok = card.dataset.applied === '0';
+      card.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    }});
+
+    // Hide a section heading if every card under it is filtered out.
+    secs.forEach(sec => {{
+      const id = sec.dataset.sec;
+      const any = cards.some(c => c.dataset.sec === id && c.style.display !== 'none');
+      sec.style.display = any ? '' : 'none';
+    }});
+
+    count.textContent = shown + ' shown';
+    empty.style.display = shown ? 'none' : 'block';
+  }}
+
+  q.addEventListener('input', apply);
+  chips.forEach(chip => chip.addEventListener('click', () => {{
+    const f = chip.dataset.f;
+    if (active.has(f)) {{ active.delete(f); chip.setAttribute('aria-pressed','false'); }}
+    else               {{ active.add(f);    chip.setAttribute('aria-pressed','true'); }}
+    apply();
+  }}));
+}})();
+</script>
 </body></html>"""
 
     open(HTML_OUT, "w", encoding="utf-8").write(htmldoc)
