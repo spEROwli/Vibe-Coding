@@ -26,6 +26,7 @@ Cloudflare and 403s any datacenter IP.
 """
 
 import argparse, csv, json, sys, urllib.request
+from datetime import datetime, timezone, timedelta
 from urllib.error import HTTPError, URLError
 
 
@@ -127,6 +128,39 @@ def _years_sentence(desc: str) -> str:
     return "not stated"
 
 
+def _within_days(date_str: str, days: int) -> bool:
+    """Return True only if date_str parses to within the last `days` days.
+    Returns False for empty or unparseable dates."""
+    if not date_str:
+        return False
+    cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
+    s = date_str.strip()
+    # Unix timestamp (integer ms or s)
+    try:
+        ts = float(s)
+        if ts > 1e11:
+            ts /= 1000
+        return datetime.fromtimestamp(ts, tz=timezone.utc) >= cutoff
+    except (ValueError, OSError, OverflowError):
+        pass
+    # ISO 8601 — normalize Z suffix for Python < 3.11
+    iso = s[:-1] + "+00:00" if s.endswith("Z") else s
+    try:
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt >= cutoff
+    except ValueError:
+        pass
+    # Fallback literal formats
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%B %d, %Y"):
+        try:
+            return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc) >= cutoff
+        except ValueError:
+            pass
+    return False  # unparseable = drop
+
+
 def extract(job: dict) -> dict:
     title    = _dig(job, FIELD_KEYS["title"])
     company  = _dig(job, FIELD_KEYS["company"])
@@ -159,7 +193,7 @@ def _search_state(query: str) -> dict:
         "workplaceTypes":  ["Remote", "Hybrid", "Onsite"],
         "commitmentTypes": ["Full Time"],
         "seniorityLevel":  [],
-        "sortBy":          "default",
+        "sortBy":          "recent",
     }
 
 
@@ -269,7 +303,7 @@ def dump_schema(query: str):
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
-def run(queries: list, pages: int, remote_only: bool):
+def run(queries: list, pages: int, remote_only: bool, nyc_only: bool = False, days: int = 7):
     jobs = []
     for q in queries:
         print(f"Querying hiring.cafe for '{q}' ({pages} page(s) max)…")
@@ -292,10 +326,25 @@ def run(queries: list, pages: int, remote_only: bool):
         if not _passes_title(r["title"]):
             dropped_title += 1
             continue
-        if not _passes_location(r["loc_class"], remote_only):
+        if nyc_only:
+            if r["loc_class"] != "nyc":
+                dropped_loc += 1
+                continue
+        elif not _passes_location(r["loc_class"], remote_only):
             dropped_loc += 1
             continue
         kept.append(r)
+
+    # Date filter — drop anything older than `days` days or with no date.
+    dropped_date = 0
+    if days > 0:
+        date_kept = []
+        for r in kept:
+            if _within_days(r["date"], days):
+                date_kept.append(r)
+            else:
+                dropped_date += 1
+        kept = date_kept
 
     # Dedupe within this run (aggregators repeat the same job from multiple ATSs)
     # and against applied.csv.
@@ -313,15 +362,16 @@ def run(queries: list, pages: int, remote_only: bool):
         deduped.append(r)
 
     # ── manifest (SCRAPER_RULES) ──
-    import datetime
+    loc_label = "nyc-only" if nyc_only else ("remote-only" if remote_only else "nyc+remote")
     print("\n" + "─" * 74)
     print("HIRING CAFÉ PIPELINE — MANIFEST")
-    print(f"  run:            {datetime.datetime.now().isoformat(timespec='seconds')}")
-    print(f"  queries:        {queries}   remote_only={remote_only}")
+    print(f"  run:            {datetime.now().isoformat(timespec='seconds')}")
+    print(f"  queries:        {queries}   location={loc_label}")
     print(f"  API returned:   {total}")
     print(f"  dropped blank:  {dropped_blank} (no title or no apply url)")
     print(f"  dropped title:  {dropped_title} (not IC-level PM)")
-    print(f"  dropped loc:    {dropped_loc} (not NYC/remote-US)")
+    print(f"  dropped loc:    {dropped_loc} ({'not nyc' if nyc_only else 'not NYC/remote-US'})")
+    print(f"  dropped date:   {dropped_date} (older than {days}d or no date)")
     print(f"  skipped applied:{skipped_applied}")
     print(f"  EMITTED:        {len(deduped)}")
     print("  Every role below was returned by a live API call in this run. No")
@@ -354,6 +404,10 @@ if __name__ == "__main__":
                     help="Keep Senior/Staff/Principal/Lead PM roles too")
     ap.add_argument("--broad", action="store_true",
                     help="Run all PM title variants (widest net); implies --all-levels")
+    ap.add_argument("--nyc-only", action="store_true",
+                    help="NYC in-office/hybrid only; excludes remote and remote+nyc")
+    ap.add_argument("--days", type=int, default=7,
+                    help="Only keep jobs posted within this many days (default 7; 0=no filter)")
     ap.add_argument("--schema", action="store_true",
                     help="dump a sample job's raw fields and exit (verification)")
     ap.add_argument("--probe", action="store_true",
@@ -369,4 +423,4 @@ if __name__ == "__main__":
         dump_schema(args.query)
     else:
         queries = BROAD_QUERIES if args.broad else [args.query]
-        run(queries, args.pages, args.remote_only)
+        run(queries, args.pages, args.remote_only, nyc_only=args.nyc_only, days=args.days)
