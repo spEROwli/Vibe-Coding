@@ -39,10 +39,17 @@ if [ -f "$HOME/.config/pmfarm/gmail_token.json" ]; then
   "$PYTHON" pmfarm_gmail_sync.py || echo "  [warn] Gmail sync failed — check token"
 fi
 
-# 2. Scrape ATS APIs and write pm_roles.csv.
-"$PYTHON" pmfarm.py --all-levels
+# 2. Refresh company list once a week so new companies surface fresh roles.
+CACHE="$SCRIPT_DIR/verified_companies.json"
+if [ ! -f "$CACHE" ] || [ "$(( $(date +%s) - $(stat -f %m "$CACHE" 2>/dev/null || stat -c %Y "$CACHE" 2>/dev/null || echo 0) ))" -gt 518400 ]; then
+  echo "  [discover] refreshing company list…"
+  "$PYTHON" discover.py || echo "  [warn] discover.py failed — using existing cache"
+fi
 
-# 3. Build HTML dashboard from pm_roles.csv.
+# 3. Scrape ATS APIs and write pm_roles.csv (IC-level only, no --all-levels).
+"$PYTHON" pmfarm.py
+
+# 4. Build HTML dashboard from pm_roles.csv.
 "$PYTHON" build_page.py
 
 # 4. Publish updated HTML to GitHub Pages.
