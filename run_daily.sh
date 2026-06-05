@@ -54,11 +54,17 @@ fi
 
 # 4. Publish updated HTML to GitHub Pages.
 #    Only commits if pm_roles.html actually changed (idempotent).
+#    Pull --rebase BEFORE committing so local never diverges from remote, and
+#    force a non-interactive merge so the script can never trap you in vim.
 if ! git diff --quiet pm_roles.html 2>/dev/null; then
+  BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+  # Sync with remote first (autostash protects the uncommitted pm_roles.html).
+  GIT_EDITOR=true git pull --rebase --autostash origin "$BRANCH" \
+    || echo "  [warn] pull --rebase failed — pushing local state anyway"
   git add pm_roles.html
   git commit -m "daily update $(date -u +%Y-%m-%d)"
-  git push origin HEAD:main
-  echo "  [ok] pm_roles.html pushed to GitHub"
+  git push origin "HEAD:$BRANCH"
+  echo "  [ok] pm_roles.html pushed to $BRANCH"
 else
   echo "  [skip] pm_roles.html unchanged — nothing to push"
 fi
