@@ -22,7 +22,7 @@ TITLE_EXCLUDE      = ["marketing", "program manager", "product marketing"]
 # (?<!\w) / (?!\w) are lookaround equivalents of \b that work around "sr." having a
 # non-word char at the end.
 _SENIORITY_RE = re.compile(
-    r'(?<!\w)(?:senior|sr\.|staff|principal|lead|director|vp|vice\s+president)(?!\w)'
+    r'(?<!\w)(?:senior|sr\.?|staff|principal|lead|director|vp|vice\s+president)(?!\w)'
     r'|(?<!\w)head\s+of\b'
     r'|(?<!\w)group\s+product\b'
     r'|\b(?:ii|iii)(?:\s|$)',
@@ -47,6 +47,21 @@ _US_NON_NYC = [
     "detroit", "cleveland", "cincinnati", "indianapolis", "st. louis",
     "kansas city", "new orleans", "richmond", "baltimore", "washington dc",
     "washington, dc", "washington, d.c", "washington",
+]
+
+# Country/region markers that make a role non-US even if it says "remote"
+# ("Remote - Canada", "Remote, EMEA"). Used to stop foreign-remote roles from
+# being classified as US-remote and slipping past the geo filter.
+_INTL_MARKERS = [
+    "canada", "toronto", "vancouver", "montreal", "ontario",
+    "united kingdom", "london", "england", "ireland", "dublin",
+    "france", "paris", "germany", "berlin", "munich", "munzstrasse",
+    "netherlands", "amsterdam", "spain", "madrid", "barcelona", "aveiro",
+    "portugal", "lisbon", "italy", "rome", "milan", "poland", "warsaw",
+    "sweden", "stockholm", "switzerland", "zurich", "emea", "apac",
+    "japan", "tokyo", "singapore", "india", "bangalore", "bengaluru",
+    "australia", "sydney", "melbourne", "brazil", "sao paulo", "mexico",
+    "hungary", "budapest", "israel", "tel aviv", "philippines", "manila",
 ]
 
 # Keywords in description that signal the role values engineering background.
@@ -240,6 +255,12 @@ def _loc_class(location: str, snippet: str = "") -> str:
     loc_lower = location.lower()
     has_nyc             = any(n in loc_lower for n in NYC_LOCS)
 
+    # A named foreign country/region makes this international regardless of
+    # "remote" — "Remote - Canada" is not a US-remote role.
+    has_intl = any(m in loc_lower for m in _INTL_MARKERS)
+    if has_intl and not has_nyc:
+        return "international"
+
     # Explicit "remote" in the location field always wins.
     has_explicit_remote = "remote" in loc_lower
 
@@ -303,7 +324,7 @@ def _passes_location(lc: str, remote_only: bool, include_unknown: bool = False) 
     if remote_only:
         allowed = {"remote", "remote+nyc"}
     else:
-        allowed = {"remote", "remote+nyc", "nyc", "international"}
+        allowed = {"remote", "remote+nyc", "nyc"}
     if include_unknown:
         allowed.add("unknown")
     return lc in allowed
