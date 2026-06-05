@@ -486,7 +486,7 @@ def fetch_lever(slug: str) -> list[dict]:
         location = cats.get("location", "")
         content  = " ".join(_strip_html(li.get("content", "")) for li in j.get("lists", []))
         ts       = j.get("createdAt")
-        date_str = (datetime.datetime.utcfromtimestamp(ts / 1000).isoformat() + "Z") if ts is not None else None
+        date_str = (datetime.datetime.fromtimestamp(ts / 1000, datetime.timezone.utc).isoformat().replace("+00:00", "Z")) if ts is not None else None
         out.append(_make_job(
             "Lever", slug, title, location,
             j.get("hostedUrl", ""), content[:500],
