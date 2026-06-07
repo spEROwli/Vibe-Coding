@@ -8,7 +8,7 @@ All data comes from live ATS JSON APIs. See SCRAPER_RULES.md.
 Dedupe: gmail_applied.txt (primary) + applied.csv (fallback).
 """
 
-import argparse, csv, datetime, html as H, json, re, sys, urllib.request, urllib.error, urllib.parse
+import argparse, csv, datetime, html as H, json, re, sys, urllib.request, urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ── FILTERS ──────────────────────────────────────────────────────────────────
@@ -26,6 +26,17 @@ _SENIORITY_RE = re.compile(
     r'|(?<!\w)head\s+of\b'
     r'|(?<!\w)group\s+product\b'
     r'|\b(?:ii|iii)(?:\s|$)',
+    re.IGNORECASE,
+)
+
+# Executive/level markers that are disqualifying NO MATTER where they appear in
+# the title — after a comma, a dash, or a slash ("Product Manager, VP",
+# "PM - Vice President", "… Senior Associate / Vice President"). These roles are
+# dropped entirely (never written to the CSV), even under --all-levels, because
+# they are categorically above the IC bar this tool targets.
+_HARD_SENIOR_RE = re.compile(
+    r'(?<!\w)(?:vice\s+president|vp|svp|evp|senior\s+associate|head\s+of|'
+    r'principal|staff|director|managing\s+director|md)(?!\w)',
     re.IGNORECASE,
 )
 
@@ -307,6 +318,10 @@ def _passes_title(title: str) -> bool:
         return False
     if any(kw in t for kw in TITLE_EXCLUDE):
         return False
+    # Hard executive markers (VP/Director/Principal/Staff/Senior Associate/MD)
+    # disqualify anywhere in the title and are NOT overridable by --all-levels.
+    if _HARD_SENIOR_RE.search(t):
+        return False
     if INCLUDE_SENIOR:
         return True
     # Check seniority only in the pre-comma segment: "Product Manager, Senior Care"
@@ -555,156 +570,49 @@ def fetch_themuse(pages: int = 4) -> list[dict]:
     return out
 
 
-# ── hiring.cafe (aggregator across 46+ ATSs; NYC-filtered at source) ───────────
-# Unlike the fixed Greenhouse/Lever slug list, hiring.cafe searches every company
-# and lets the server filter by location/seniority/freshness — so this is what
-# delivers FRESH, NYC, IC-level roles instead of the same stale big-company pool.
-# Must run locally: hiring.cafe 403s datacenter IPs (won't work in the container).
-HIRINGCAFE_DAYS = 7   # only roles first seen in the last N days (freshness gate)
-
-# Full New York City locality object (Google-Places shape the API requires for a
-# real geo filter). Copied from the hiring.cafe NYC search URL.
-_HC_NYC_LOCATION = {
-    "id": "8Bk1yZQBoEtHp_8UuN0b",
-    "types": ["locality"],
-    "address_components": [
-        {"long_name": "New York City", "short_name": "New York City", "types": ["locality"]},
-        {"long_name": "New York", "short_name": "NY", "types": ["administrative_area_level_1"]},
-        {"long_name": "United States", "short_name": "US", "types": ["country"]},
-    ],
-    "geometry": {"location": {"lat": 40.71427, "lon": -74.00597}},
-    "formatted_address": "New York City, NY, US",
-    "population": 8804190,
-    "workplace_types": [],
-    "options": {"radius": 25, "radius_unit": "miles", "ignore_radius": False},
-}
-
-_HC_HEADERS = {
-    "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                   "AppleWebKit/537.36 (KHTML, like Gecko) "
-                   "Chrome/130.0.0.0 Safari/537.36"),
-    "Accept":       "application/json, text/plain, */*",
-    "Content-Type": "application/json",
-    "Referer":      "https://hiring.cafe/",
-    "Origin":       "https://hiring.cafe",
-}
+# ── Remotive (public API; remote-first job board, no auth, no Cloudflare) ──────
+# Second live source, complementing The Muse. Remotive is remote-only, so this
+# deepens the US-REMOTE half of the goal (The Muse covers NYC). Every role is
+# remote; we keep only those a US-based candidate can take (USA / North America /
+# Worldwide / Anywhere) and drop region-locked foreign listings. No API key.
+# Docs: https://github.com/remotive-com/remote-jobs-api
+_REMOTIVE_US_OK = [
+    "usa", "u.s.", "united states", "north america", "americas",
+    "worldwide", "anywhere", "global", "remote",
+]
 
 
-class _PostPreservingRedirect(urllib.request.HTTPRedirectHandler):
-    """urllib downgrades POST→GET on 301/302/303; hiring.cafe redirects to add a
-    trailing slash, and the downgraded GET hits a POST-only route (405). Re-issue
-    as POST with the body intact."""
-    def redirect_request(self, req, fp, code, msg, headers, newurl):
-        return urllib.request.Request(
-            newurl, data=req.data, headers=dict(req.header_items()),
-            method="POST", origin_req_host=req.origin_req_host, unverifiable=True)
-
-
-_HC_OPENER = urllib.request.build_opener(_PostPreservingRedirect)
-
-
-def _hc_dig(obj, keys):
-    """Recursive first-match for a field across nested dicts/lists (verbatim)."""
-    if isinstance(obj, dict):
-        for k in keys:
-            v = obj.get(k)
-            if isinstance(v, str) and v.strip():
-                return v.strip()
-            if isinstance(v, (int, float)):
-                return str(v)
-        for v in obj.values():
-            found = _hc_dig(v, keys)
-            if found:
-                return found
-    elif isinstance(obj, list):
-        for item in obj:
-            found = _hc_dig(item, keys)
-            if found:
-                return found
-    return ""
-
-
-_HC_KEYS = {
-    "title":    ["core_job_title", "job_title", "title", "position_name", "role_title"],
-    "company":  ["company_name", "employer_name", "company", "organization", "org_name"],
-    "location": ["formatted_workplace_location", "workplace_physical_location",
-                 "workplace_location", "formatted_address", "location", "city"],
-    "url":      ["apply_url", "apply_link", "job_url", "source_url", "url", "link"],
-    "desc":     ["requirements_summary", "job_description", "description",
-                 "description_text", "jd"],
-    "date":     ["estimated_publish_date", "posted_date", "date_posted",
-                 "created_at", "publish_date"],
-}
-
-
-def fetch_hiringcafe(days: int = None, remote_too: bool = True) -> list[dict]:
-    """Query hiring.cafe for NYC, Individual-Contributor, entry/mid PM roles posted
-    in the last `days` days. Server-side filters mean these are fresh + on-target."""
-    days = HIRINGCAFE_DAYS if days is None else days
-    locations = [_HC_NYC_LOCATION]
-    search_state = {
-        "locations":       locations,
-        "searchQuery":     "product manager",
-        "dateFetchedPastNDays": days,
-        "roleTypes":       ["Individual Contributor"],
-        "physicalLaborIntensity": ["Low", "Medium"],
-        "seniorityLevel":  ["No Prior Experience Required", "Entry Level", "Mid Level"],
-        "workplaceTypes":  ["Remote", "Hybrid", "Onsite"] if remote_too else ["Hybrid", "Onsite"],
-        "commitmentTypes": ["Full Time"],
-        "sortBy":          "default",
-    }
-    out, total = [], 0
-    for page in range(5):
-        body = json.dumps({"size": 100, "page": page, "searchState": search_state}).encode()
-        req  = urllib.request.Request("https://hiring.cafe/api/search-jobs",
-                                      data=body, headers=_HC_HEADERS, method="POST")
-        try:
-            with _HC_OPENER.open(req, timeout=20) as r:
-                data = json.loads(r.read())
-        except urllib.error.HTTPError as e:
-            if e.code == 405 and page == 0:   # redirect-downgrade: retry trailing slash
-                req2 = urllib.request.Request("https://hiring.cafe/api/search-jobs/",
-                                              data=body, headers=_HC_HEADERS, method="POST")
-                try:
-                    with _HC_OPENER.open(req2, timeout=20) as r:
-                        data = json.loads(r.read())
-                except Exception as e2:
-                    print(f"  [hiring.cafe] {e2}", file=sys.stderr); break
-            else:
-                print(f"  [hiring.cafe] HTTP {e.code} {e.reason}"
-                      + (" — blocked datacenter IP; run locally" if e.code in (401, 403) else ""),
-                      file=sys.stderr)
-                break
-        except Exception as e:
-            print(f"  [hiring.cafe] {e}", file=sys.stderr); break
-
-        batch = []
-        for key in ("results", "jobs", "data", "items", "content"):
-            if isinstance(data, dict) and isinstance(data.get(key), list):
-                batch = data[key]; break
-        else:
-            if isinstance(data, list):
-                batch = data
-        if not batch:
-            break
-        total += len(batch)
-        for j in batch:
-            title = _hc_dig(j, _HC_KEYS["title"])
-            if not title or not _passes_title(title):
-                continue
-            url = _hc_dig(j, _HC_KEYS["url"])
-            if not url:
-                continue
-            location = _hc_dig(j, _HC_KEYS["location"])
-            desc     = _hc_dig(j, _HC_KEYS["desc"])
-            date     = _hc_dig(j, _HC_KEYS["date"]) or None
-            out.append(_make_job(
-                "HiringCafe", _hc_dig(j, _HC_KEYS["company"]) or "(unknown)",
-                title, location, url, desc[:500], date, full_content=desc,
-            ))
-        if len(batch) < 100:
-            break
-    print(f"  fetch_hiringcafe: {total} returned → {len(out)} matched IC-PM title")
+def fetch_remotive(limit: int = 100) -> list[dict]:
+    url  = ("https://remotive.com/api/remote-jobs"
+            f"?category=product&limit={limit}")
+    data = _fetch(url)
+    if not isinstance(data, dict):
+        print("  [remotive] no/blocked response (check network)", file=sys.stderr)
+        return []
+    jobs = data.get("jobs", [])
+    out, total = [], len(jobs)
+    for j in jobs:
+        title = j.get("title", "")
+        if not _passes_title(title):
+            continue
+        apply_url = j.get("url", "")
+        if not apply_url:
+            continue
+        region = (j.get("candidate_required_location", "") or "").strip()
+        # US-eligibility gate: keep only regions a US candidate can work from.
+        rlow = region.lower()
+        if region and not any(ok in rlow for ok in _REMOTIVE_US_OK):
+            continue
+        company  = j.get("company_name", "") or "(unknown)"
+        # All Remotive roles are remote — prefix so _loc_class reads "remote".
+        location = f"Remote — {region}" if region else "Remote"
+        content  = _strip_html(j.get("description", ""))
+        date     = j.get("publication_date")   # ISO-8601, e.g. 2026-06-01T12:00:00
+        out.append(_make_job(
+            "Remotive", company, title, location,
+            apply_url, content[:500], date, full_content=content,
+        ))
+    print(f"  fetch_remotive: {total} returned → {len(out)} matched IC-PM + US-remote")
     return out
 
 
@@ -789,6 +697,13 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
         raw.extend(fetch_themuse())
     except Exception as e:
         print(f"  [themuse] skipped: {e}", file=sys.stderr)
+
+    # ── Remotive: second live source — fresh US-remote Product roles ──────────
+    print("Querying Remotive for fresh US-remote Product roles…")
+    try:
+        raw.extend(fetch_remotive())
+    except Exception as e:
+        print(f"  [remotive] skipped: {e}", file=sys.stderr)
 
     # ── freshness filter: drop stale postings with a known age > MAX_AGE_DAYS ──
     def _too_old(j: dict) -> bool:
