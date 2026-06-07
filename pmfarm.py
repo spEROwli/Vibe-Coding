@@ -583,8 +583,12 @@ _REMOTIVE_US_OK = [
 
 
 def fetch_remotive(limit: int = 100) -> list[dict]:
+    # Query by search term, not category: the "product" category is a small,
+    # senior-heavy feed (Product Designer / Owner / Senior PM) that filters to
+    # nothing. A "product manager" search returns actual PM-titled roles across
+    # every category, giving the IC title filter something to keep.
     url  = ("https://remotive.com/api/remote-jobs"
-            f"?category=product&limit={limit}")
+            f"?search=product+manager&limit={limit}")
     data = _fetch(url)
     if not isinstance(data, dict):
         print("  [remotive] no/blocked response (check network)", file=sys.stderr)
