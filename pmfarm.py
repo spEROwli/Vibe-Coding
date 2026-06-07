@@ -632,6 +632,32 @@ def fetch_remotive(limit: int = 100) -> list[dict]:
             apply_url, content[:500], date, full_content=content,
         ))
     print(f"  fetch_remotive: {total} returned → {len(out)} matched IC-PM + US-remote")
+    if total and not out:
+        # Diagnostic: show why the first few were dropped so we can tune the filter.
+        print("  [remotive-debug] filter breakdown on first 20 jobs:")
+        counts: dict[str, int] = {}
+        for j in (jobs[:20]):
+            title  = j.get("title", "")
+            region = (j.get("candidate_required_location", "") or "").strip()
+            t      = title.lower()
+            rlow   = region.lower()
+            if not title:
+                reason = "no-title"
+            elif not any(kw in t for kw in TITLE_MUST_INCLUDE):
+                reason = f"must-include-miss"
+            elif any(kw in t for kw in TITLE_EXCLUDE):
+                reason = "excluded-kw"
+            elif _HARD_SENIOR_RE.search(t):
+                reason = "hard-senior"
+            elif _SENIORITY_RE.search(t.split(",", 1)[0]):
+                reason = "soft-senior"
+            elif region and not any(ok in rlow for ok in _REMOTIVE_US_OK):
+                reason = "non-us-region"
+            else:
+                reason = "passed-all?"
+            counts[reason] = counts.get(reason, 0) + 1
+            print(f"    {reason:20s}  {title!r}  [{region}]")
+        print(f"  [remotive-debug] summary: {counts}")
     return out
 
 
