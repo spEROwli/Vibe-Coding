@@ -8,7 +8,7 @@ All data comes from live ATS JSON APIs. See SCRAPER_RULES.md.
 Dedupe: gmail_applied.txt (primary) + applied.csv (fallback).
 """
 
-import argparse, csv, datetime, html as H, json, re, sys, urllib.request
+import argparse, csv, datetime, html as H, json, re, sys, urllib.request, urllib.error
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ── FILTERS ──────────────────────────────────────────────────────────────────
@@ -496,6 +496,159 @@ def fetch_lever(slug: str) -> list[dict]:
     return out
 
 
+# ── hiring.cafe (aggregator across 46+ ATSs; NYC-filtered at source) ───────────
+# Unlike the fixed Greenhouse/Lever slug list, hiring.cafe searches every company
+# and lets the server filter by location/seniority/freshness — so this is what
+# delivers FRESH, NYC, IC-level roles instead of the same stale big-company pool.
+# Must run locally: hiring.cafe 403s datacenter IPs (won't work in the container).
+HIRINGCAFE_DAYS = 7   # only roles first seen in the last N days (freshness gate)
+
+# Full New York City locality object (Google-Places shape the API requires for a
+# real geo filter). Copied from the hiring.cafe NYC search URL.
+_HC_NYC_LOCATION = {
+    "id": "8Bk1yZQBoEtHp_8UuN0b",
+    "types": ["locality"],
+    "address_components": [
+        {"long_name": "New York City", "short_name": "New York City", "types": ["locality"]},
+        {"long_name": "New York", "short_name": "NY", "types": ["administrative_area_level_1"]},
+        {"long_name": "United States", "short_name": "US", "types": ["country"]},
+    ],
+    "geometry": {"location": {"lat": 40.71427, "lon": -74.00597}},
+    "formatted_address": "New York City, NY, US",
+    "population": 8804190,
+    "workplace_types": [],
+    "options": {"radius": 25, "radius_unit": "miles", "ignore_radius": False},
+}
+
+_HC_HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                   "AppleWebKit/537.36 (KHTML, like Gecko) "
+                   "Chrome/130.0.0.0 Safari/537.36"),
+    "Accept":       "application/json, text/plain, */*",
+    "Content-Type": "application/json",
+    "Referer":      "https://hiring.cafe/",
+    "Origin":       "https://hiring.cafe",
+}
+
+
+class _PostPreservingRedirect(urllib.request.HTTPRedirectHandler):
+    """urllib downgrades POST→GET on 301/302/303; hiring.cafe redirects to add a
+    trailing slash, and the downgraded GET hits a POST-only route (405). Re-issue
+    as POST with the body intact."""
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return urllib.request.Request(
+            newurl, data=req.data, headers=dict(req.header_items()),
+            method="POST", origin_req_host=req.origin_req_host, unverifiable=True)
+
+
+_HC_OPENER = urllib.request.build_opener(_PostPreservingRedirect)
+
+
+def _hc_dig(obj, keys):
+    """Recursive first-match for a field across nested dicts/lists (verbatim)."""
+    if isinstance(obj, dict):
+        for k in keys:
+            v = obj.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+            if isinstance(v, (int, float)):
+                return str(v)
+        for v in obj.values():
+            found = _hc_dig(v, keys)
+            if found:
+                return found
+    elif isinstance(obj, list):
+        for item in obj:
+            found = _hc_dig(item, keys)
+            if found:
+                return found
+    return ""
+
+
+_HC_KEYS = {
+    "title":    ["core_job_title", "job_title", "title", "position_name", "role_title"],
+    "company":  ["company_name", "employer_name", "company", "organization", "org_name"],
+    "location": ["formatted_workplace_location", "workplace_physical_location",
+                 "workplace_location", "formatted_address", "location", "city"],
+    "url":      ["apply_url", "apply_link", "job_url", "source_url", "url", "link"],
+    "desc":     ["requirements_summary", "job_description", "description",
+                 "description_text", "jd"],
+    "date":     ["estimated_publish_date", "posted_date", "date_posted",
+                 "created_at", "publish_date"],
+}
+
+
+def fetch_hiringcafe(days: int = None, remote_too: bool = True) -> list[dict]:
+    """Query hiring.cafe for NYC, Individual-Contributor, entry/mid PM roles posted
+    in the last `days` days. Server-side filters mean these are fresh + on-target."""
+    days = HIRINGCAFE_DAYS if days is None else days
+    locations = [_HC_NYC_LOCATION]
+    search_state = {
+        "locations":       locations,
+        "searchQuery":     "product manager",
+        "dateFetchedPastNDays": days,
+        "roleTypes":       ["Individual Contributor"],
+        "physicalLaborIntensity": ["Low", "Medium"],
+        "seniorityLevel":  ["No Prior Experience Required", "Entry Level", "Mid Level"],
+        "workplaceTypes":  ["Remote", "Hybrid", "Onsite"] if remote_too else ["Hybrid", "Onsite"],
+        "commitmentTypes": ["Full Time"],
+        "sortBy":          "default",
+    }
+    out, total = [], 0
+    for page in range(5):
+        body = json.dumps({"size": 100, "page": page, "searchState": search_state}).encode()
+        req  = urllib.request.Request("https://hiring.cafe/api/search-jobs",
+                                      data=body, headers=_HC_HEADERS, method="POST")
+        try:
+            with _HC_OPENER.open(req, timeout=20) as r:
+                data = json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            if e.code == 405 and page == 0:   # redirect-downgrade: retry trailing slash
+                req2 = urllib.request.Request("https://hiring.cafe/api/search-jobs/",
+                                              data=body, headers=_HC_HEADERS, method="POST")
+                try:
+                    with _HC_OPENER.open(req2, timeout=20) as r:
+                        data = json.loads(r.read())
+                except Exception as e2:
+                    print(f"  [hiring.cafe] {e2}", file=sys.stderr); break
+            else:
+                print(f"  [hiring.cafe] HTTP {e.code} {e.reason}"
+                      + (" — blocked datacenter IP; run locally" if e.code in (401, 403) else ""),
+                      file=sys.stderr)
+                break
+        except Exception as e:
+            print(f"  [hiring.cafe] {e}", file=sys.stderr); break
+
+        batch = []
+        for key in ("results", "jobs", "data", "items", "content"):
+            if isinstance(data, dict) and isinstance(data.get(key), list):
+                batch = data[key]; break
+        else:
+            if isinstance(data, list):
+                batch = data
+        if not batch:
+            break
+        total += len(batch)
+        for j in batch:
+            title = _hc_dig(j, _HC_KEYS["title"])
+            if not title or not _passes_title(title):
+                continue
+            url = _hc_dig(j, _HC_KEYS["url"])
+            if not url:
+                continue
+            location = _hc_dig(j, _HC_KEYS["location"])
+            desc     = _hc_dig(j, _HC_KEYS["desc"])
+            date     = _hc_dig(j, _HC_KEYS["date"]) or None
+            out.append(_make_job(
+                "HiringCafe", _hc_dig(j, _HC_KEYS["company"]) or "(unknown)",
+                title, location, url, desc[:500], date, full_content=desc,
+            ))
+        if len(batch) < 100:
+            break
+    print(f"  fetch_hiringcafe: {total} returned → {len(out)} matched IC-PM title")
+    return out
+
+
 # ── output ─────────────────────────────────────────────────────────────────────
 
 def _sort_key(j: dict) -> tuple:
@@ -568,6 +721,14 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
                 raw.extend(rows)
             except Exception as e:
                 print(f"  {fn_name}({slug}) error: {e}", file=sys.stderr)
+
+    # ── hiring.cafe: fresh NYC IC-level roles across all companies (primary
+    #    source of relevance — the fixed ATS list above is supplementary) ──────
+    print("\nQuerying hiring.cafe for fresh NYC IC roles…")
+    try:
+        raw.extend(fetch_hiringcafe())
+    except Exception as e:
+        print(f"  [hiring.cafe] skipped: {e}", file=sys.stderr)
 
     # ── location filter (unknown excluded by default — P2) ───────────────────
     unknown_count = sum(1 for j in raw if j["loc_class"] == "unknown")
