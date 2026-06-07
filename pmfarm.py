@@ -169,6 +169,11 @@ YEARS_PATTERNS = [
 # not an individual PM requirement — so it is dropped.
 YEARS_DISQUALIFY = ["combined", "collective", "total", "company-wide", "across our"]
 
+# Drop roles whose posting is older than this many days (when a date is known).
+# Aggregators like The Muse keep evergreen listings open for a year+; those are
+# stale by any job-seeker's standard. Roles with no date are kept (can't judge).
+MAX_AGE_DAYS = 60
+
 APPLIED_FILE = "applied.csv"
 GMAIL_FILE   = "gmail_applied.txt"  # synced by pmfarm_gmail_sync.py; one company per line
 OUTPUT_FILE  = "pm_roles.csv"
@@ -382,11 +387,18 @@ def _load_applied() -> set[str]:
 
 
 def _deduped(jobs: list[dict], applied: set[str]) -> list[dict]:
-    out = []
+    out, seen = [], set()
     for j in jobs:
-        if (_norm_url(j["url"]) in applied or
-                _ct_key(j["company"], j["title"]) in applied):
+        nu = _norm_url(j["url"])
+        ck = _ct_key(j["company"], j["title"])
+        if nu in applied or ck in applied:
             continue
+        # Within-run dupe: aggregators (The Muse) repeat one role under several
+        # location groupings — same company+title is the same job.
+        if nu in seen or ck in seen:
+            continue
+        seen.add(nu)
+        seen.add(ck)
         out.append(j)
     return out
 
@@ -777,6 +789,18 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
         raw.extend(fetch_themuse())
     except Exception as e:
         print(f"  [themuse] skipped: {e}", file=sys.stderr)
+
+    # ── freshness filter: drop stale postings with a known age > MAX_AGE_DAYS ──
+    def _too_old(j: dict) -> bool:
+        try:
+            return int(j["days_old"]) > MAX_AGE_DAYS
+        except (ValueError, TypeError):
+            return False   # unknown age → keep (can't judge)
+    stale = [j for j in raw if _too_old(j)]
+    if stale:
+        print(f"\nDropped {len(stale)} stale role(s) older than {MAX_AGE_DAYS}d "
+              f"(e.g. {', '.join(sorted({j['company'] for j in stale}))[:80]})")
+    raw = [j for j in raw if not _too_old(j)]
 
     # ── location filter (unknown excluded by default — P2) ───────────────────
     unknown_count = sum(1 for j in raw if j["loc_class"] == "unknown")

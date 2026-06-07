@@ -59,10 +59,23 @@ def _load_sector_map() -> dict:
 SECTORS = _load_sector_map()
 
 
+# Executive/level markers that mean "senior" no matter where they sit in the
+# title — after a comma or a dash ("Product Manager, VP", "PM - Vice President",
+# "..., Senior Associate / Vice President"). Checked across the whole title.
+_HARD_SENIOR_RE = re.compile(
+    r'(?<!\w)(?:vice\s+president|vp|svp|evp|senior\s+associate|head\s+of|'
+    r'principal|staff|director)(?!\w)', re.I)
+
+
 def _is_senior(title: str) -> bool:
-    """True if the title carries a seniority marker in its pre-comma segment —
-    same logic the scraper uses, so buckets agree."""
-    return bool(pmfarm._SENIORITY_RE.search(title.lower().split(",", 1)[0]))
+    """True if the title carries a seniority marker. Hard executive markers
+    (VP/Director/Principal/Staff/Senior Associate) count anywhere; softer ones
+    (Senior/Lead) only in the pre-comma segment so "Product Manager, Senior Care"
+    — where 'Senior' names the specialty, not the level — is not misflagged."""
+    t = title.lower()
+    if _HARD_SENIOR_RE.search(t):
+        return True
+    return bool(pmfarm._SENIORITY_RE.search(t.split(",", 1)[0]))
 
 
 def _years_num(years_raw: str):
