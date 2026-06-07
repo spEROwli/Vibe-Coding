@@ -126,6 +126,21 @@ _FALLBACK_LEV = [
 
 
 def _load_companies() -> tuple[list, list, list]:
+    # Preferred source: companies.db (self-cleaning, learns which slugs are live).
+    # Build it with `python3 build_companydb.py`. Falls back to the JSON cache and
+    # then the hardcoded lists if the DB is absent or empty.
+    try:
+        import companydb, os
+        if os.path.exists(companydb.DB_FILE):
+            gh  = companydb.load_active("greenhouse")
+            ash = companydb.load_active("ashby")
+            lev = companydb.load_active("lever")
+            if gh or ash or lev:
+                return (gh or _FALLBACK_GH, ash or _FALLBACK_ASH, lev or _FALLBACK_LEV)
+    except Exception as e:
+        print(f"  [warn] companies.db load failed ({e}); using JSON cache",
+              file=sys.stderr)
+
     gh = ash = lev = None
     try:
         import os
@@ -779,6 +794,16 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
             failed = [k for k, v in sorted(_slug_resolution.items()) if v == "fail"]
             print("  Failed slugs: " + ", ".join(failed[:20])
                   + (f" … +{fail_n - 20} more" if fail_n > 20 else ""))
+
+        # Persist this run's outcomes so companies.db self-cleans: live slugs
+        # rise, repeatedly-failing ones get pruned from future runs.
+        try:
+            import companydb, os
+            if os.path.exists(companydb.DB_FILE):
+                companydb.record_results(_slug_resolution)
+                print(f"  (recorded results to {companydb.DB_FILE})")
+        except Exception as e:
+            print(f"  [warn] could not update companies.db: {e}", file=sys.stderr)
 
     _output(jobs, 0)
 

@@ -46,6 +46,14 @@ if [ ! -f "$CACHE" ] || [ "$(( $(date +%s) - $(stat -f %m "$CACHE" 2>/dev/null |
   "$PYTHON" discover.py || echo "  [warn] discover.py failed — using existing cache"
 fi
 
+# 2b. Build the company database on first run if it doesn't exist yet.
+#     pmfarm.py reads slugs from companies.db and records results back so the
+#     list self-cleans. Rebuild any time with: python3 build_companydb.py
+if [ ! -f "$SCRIPT_DIR/companies.db" ]; then
+  echo "  [companydb] building companies.db from seed…"
+  "$PYTHON" build_companydb.py || echo "  [warn] build_companydb.py failed — falling back to JSON cache"
+fi
+
 # 3. Scrape ATS APIs and write pm_roles.csv (IC-level only, no --all-levels).
 "$PYTHON" pmfarm.py
 
