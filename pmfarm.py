@@ -8,7 +8,7 @@ All data comes from live ATS JSON APIs. See SCRAPER_RULES.md.
 Dedupe: gmail_applied.txt (primary) + applied.csv (fallback).
 """
 
-import argparse, csv, datetime, html as H, json, re, sys, urllib.request, urllib.error
+import argparse, csv, datetime, html as H, json, re, sys, urllib.request, urllib.error, urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ── FILTERS ──────────────────────────────────────────────────────────────────
@@ -496,6 +496,53 @@ def fetch_lever(slug: str) -> list[dict]:
     return out
 
 
+# ── The Muse (public API; cross-company, NYC + Product Management filtered) ────
+# Unlike the fixed Greenhouse/Lever slug list, The Muse indexes thousands of
+# companies and filters server-side by category + location + date. No auth, no
+# Cloudflare — works from a plain script. This is the source that delivers FRESH,
+# NYC, on-target roles instead of the same stale big-company pool.
+# Docs: https://www.themuse.com/developers/api/v2
+def fetch_themuse(pages: int = 4) -> list[dict]:
+    base = "https://www.themuse.com/api/public/jobs"
+    out, total = [], 0
+    for page in range(pages):
+        params = {
+            "category":   "Product Management",
+            "location":   "New York, NY",
+            "page":       page,
+            "descending": "true",   # newest first
+        }
+        url  = base + "?" + urllib.parse.urlencode(params)
+        data = _fetch(url)
+        if not isinstance(data, dict):
+            print("  [themuse] no/blocked response on page "
+                  f"{page} (check network)", file=sys.stderr)
+            break
+        results = data.get("results", [])
+        if not results:
+            break
+        total += len(results)
+        for j in results:
+            title = j.get("name", "")
+            if not _passes_title(title):
+                continue
+            apply_url = (j.get("refs") or {}).get("landing_page", "")
+            if not apply_url:
+                continue
+            company  = (j.get("company") or {}).get("name", "") or "(unknown)"
+            location = ", ".join(l.get("name", "") for l in j.get("locations", []))
+            content  = _strip_html(j.get("contents", ""))
+            date     = j.get("publication_date")
+            out.append(_make_job(
+                "TheMuse", company, title, location,
+                apply_url, content[:500], date, full_content=content,
+            ))
+        if page + 1 >= data.get("page_count", page + 1):
+            break
+    print(f"  fetch_themuse: {total} returned → {len(out)} matched IC-PM title")
+    return out
+
+
 # ── hiring.cafe (aggregator across 46+ ATSs; NYC-filtered at source) ───────────
 # Unlike the fixed Greenhouse/Lever slug list, hiring.cafe searches every company
 # and lets the server filter by location/seniority/freshness — so this is what
@@ -722,13 +769,14 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
             except Exception as e:
                 print(f"  {fn_name}({slug}) error: {e}", file=sys.stderr)
 
-    # ── hiring.cafe: fresh NYC IC-level roles across all companies (primary
-    #    source of relevance — the fixed ATS list above is supplementary) ──────
-    print("\nQuerying hiring.cafe for fresh NYC IC roles…")
+    # ── The Muse: fresh NYC Product-Management roles across all companies
+    #    (primary source of relevance — the fixed ATS list above is supplementary;
+    #    hiring.cafe is unusable: fully behind Cloudflare bot protection) ────────
+    print("\nQuerying The Muse for fresh NYC Product Management roles…")
     try:
-        raw.extend(fetch_hiringcafe())
+        raw.extend(fetch_themuse())
     except Exception as e:
-        print(f"  [hiring.cafe] skipped: {e}", file=sys.stderr)
+        print(f"  [themuse] skipped: {e}", file=sys.stderr)
 
     # ── location filter (unknown excluded by default — P2) ───────────────────
     unknown_count = sum(1 for j in raw if j["loc_class"] == "unknown")
