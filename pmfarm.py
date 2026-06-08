@@ -594,7 +594,7 @@ def fetch_themuse(pages: int = 4) -> list[dict]:
                     "TheMuse", company, title, location,
                     apply_url, content[:500], date, full_content=content,
                 ))
-            if page + 1 >= data.get("page_count", page + 1):
+            if page + 1 >= data.get("page_count", pages + 1):
                 break
 
     print(f"  fetch_themuse: {total} returned → {len(out)} matched IC-PM title")
@@ -705,13 +705,12 @@ def fetch_adzuna(pages_per_search: int = 4) -> list[dict]:
     seen_urls: set[str] = set()
     total = 0
 
-    # Two targeted searches: NYC + remote keyword. Adzuna full-text search returns
-    # too many off-topic results (truck drivers, nurses) without a location anchor.
-    # NYC search: server-side city filter surfaces actual NYC PM listings.
-    # Remote search: "product manager remote" phrase catches remote-labelled postings.
+    # Two targeted searches: NYC (location-anchored) + nationwide (remote discovery).
+    # The nationwide pass uses no `where` so Adzuna returns all US results; our
+    # existing _loc_class() then keeps only remote/remote+nyc classified roles.
     searches = [
         {"what_phrase": "product manager", "where": "New York City, NY"},
-        {"what_phrase": "product manager remote"},
+        {"what_phrase": "product manager"},
     ]
 
     for search_params in searches:
