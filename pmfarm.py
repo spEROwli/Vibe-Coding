@@ -8,7 +8,7 @@ All data comes from live ATS JSON APIs. See SCRAPER_RULES.md.
 Dedupe: gmail_applied.txt (primary) + applied.csv (fallback).
 """
 
-import argparse, csv, datetime, html as H, json, re, sys, urllib.request, urllib.parse
+import argparse, csv, datetime, html as H, json, os, re, sys, urllib.request, urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ── FILTERS ──────────────────────────────────────────────────────────────────
@@ -546,41 +546,57 @@ def fetch_lever(slug: str) -> list[dict]:
 # Docs: https://www.themuse.com/developers/api/v2
 def fetch_themuse(pages: int = 4) -> list[dict]:
     base = "https://www.themuse.com/api/public/jobs"
-    out, total = [], 0
-    for page in range(pages):
-        params = {
-            "category":   "Product Management",
-            "location":   "New York, NY",
-            "page":       page,
-            "descending": "true",   # newest first
-        }
-        url  = base + "?" + urllib.parse.urlencode(params)
-        data = _fetch(url)
-        if not isinstance(data, dict):
-            print("  [themuse] no/blocked response on page "
-                  f"{page} (check network)", file=sys.stderr)
-            break
-        results = data.get("results", [])
-        if not results:
-            break
-        total += len(results)
-        for j in results:
-            title = j.get("name", "")
-            if not _passes_title(title):
-                continue
-            apply_url = (j.get("refs") or {}).get("landing_page", "")
-            if not apply_url:
-                continue
-            company  = (j.get("company") or {}).get("name", "") or "(unknown)"
-            location = ", ".join(l.get("name", "") for l in j.get("locations", []))
-            content  = _strip_html(j.get("contents", ""))
-            date     = j.get("publication_date")
-            out.append(_make_job(
-                "TheMuse", company, title, location,
-                apply_url, content[:500], date, full_content=content,
-            ))
-        if page + 1 >= data.get("page_count", page + 1):
-            break
+    out: list[dict] = []
+    seen_urls: set[str] = set()
+    total = 0
+
+    # Two passes: NYC and Flexible/Remote — The Muse filters server-side by category,
+    # giving high precision. Deduped within this fetch by apply URL.
+    searches = [
+        ("New York, NY",       "NYC"),
+        ("Flexible / Remote",  "remote"),
+    ]
+
+    for location_filter, label in searches:
+        for page in range(pages):
+            params = {
+                "category":   "Product Management",
+                "location":   location_filter,
+                "page":       page,
+                "descending": "true",
+            }
+            url  = base + "?" + urllib.parse.urlencode(params)
+            data = _fetch(url)
+            if not isinstance(data, dict):
+                print(f"  [themuse] no/blocked response on page {page} ({label})",
+                      file=sys.stderr)
+                break
+            results = data.get("results", [])
+            if not results:
+                break
+            total += len(results)
+            for j in results:
+                title = j.get("name", "")
+                if not _passes_title(title):
+                    continue
+                apply_url = (j.get("refs") or {}).get("landing_page", "")
+                if not apply_url:
+                    continue
+                nu = _norm_url(apply_url)
+                if nu in seen_urls:
+                    continue
+                seen_urls.add(nu)
+                company  = (j.get("company") or {}).get("name", "") or "(unknown)"
+                location = ", ".join(l.get("name", "") for l in j.get("locations", []))
+                content  = _strip_html(j.get("contents", ""))
+                date     = j.get("publication_date")
+                out.append(_make_job(
+                    "TheMuse", company, title, location,
+                    apply_url, content[:500], date, full_content=content,
+                ))
+            if page + 1 >= data.get("page_count", page + 1):
+                break
+
     print(f"  fetch_themuse: {total} returned → {len(out)} matched IC-PM title")
     return out
 
@@ -658,6 +674,87 @@ def fetch_remotive(limit: int = 100) -> list[dict]:
             counts[reason] = counts.get(reason, 0) + 1
             print(f"    {reason:20s}  {title!r}  [{region}]")
         print(f"  [remotive-debug] summary: {counts}")
+    return out
+
+
+# ── Adzuna (paid API; broad US job index, keyword-search — no slug list needed) ─
+# Unlike the ATS fetchers, Adzuna is a search API: we query "product manager"
+# across all US employers and let the existing title/location filters do the work.
+# Credentials are read at runtime from adzuna_key.txt (line 1: app_id, line 2: app_key).
+# Docs: https://developer.adzuna.com/docs/search
+_ADZUNA_KEY_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "adzuna_key.txt")
+
+
+def _load_adzuna_creds() -> tuple[str, str] | None:
+    try:
+        lines = open(_ADZUNA_KEY_FILE).read().strip().splitlines()
+        return lines[0].strip(), lines[1].strip()
+    except Exception:
+        return None
+
+
+def fetch_adzuna(pages_per_search: int = 4) -> list[dict]:
+    creds = _load_adzuna_creds()
+    if not creds:
+        print("  [adzuna] skipped: adzuna_key.txt missing or malformed", file=sys.stderr)
+        return []
+    app_id, app_key = creds
+
+    base = "https://api.adzuna.com/v1/api/jobs/us/search"
+    out: list[dict] = []
+    seen_urls: set[str] = set()
+    total = 0
+
+    # Two targeted searches: NYC + remote keyword. Adzuna full-text search returns
+    # too many off-topic results (truck drivers, nurses) without a location anchor.
+    # NYC search: server-side city filter surfaces actual NYC PM listings.
+    # Remote search: "product manager remote" phrase catches remote-labelled postings.
+    searches = [
+        {"what_phrase": "product manager", "where": "New York City, NY"},
+        {"what_phrase": "product manager remote"},
+    ]
+
+    for search_params in searches:
+        for page in range(1, pages_per_search + 1):
+            params = {
+                "app_id":           app_id,
+                "app_key":          app_key,
+                "results_per_page": 50,
+                "sort_by":          "date",
+                "max_days_old":     MAX_AGE_DAYS,
+                "content-type":     "application/json",
+                **search_params,
+            }
+            url  = f"{base}/{page}?" + urllib.parse.urlencode(params)
+            data = _fetch(url)
+            if not isinstance(data, dict):
+                print(f"  [adzuna] no response on page {page} ({search_params})", file=sys.stderr)
+                break
+            results = data.get("results", [])
+            if not results:
+                break
+            total += len(results)
+            for j in results:
+                title = j.get("title", "")
+                if not _passes_title(title):
+                    continue
+                apply_url = j.get("redirect_url", "")
+                if not apply_url:
+                    continue
+                nu = _norm_url(apply_url)
+                if nu in seen_urls:
+                    continue
+                seen_urls.add(nu)
+                company  = (j.get("company") or {}).get("display_name", "") or "(unknown)"
+                location = (j.get("location") or {}).get("display_name", "") or ""
+                content  = _strip_html(j.get("description", ""))
+                date_str = j.get("created")   # ISO-8601 e.g. "2026-06-01T12:00:00Z"
+                out.append(_make_job(
+                    "Adzuna", company, title, location,
+                    apply_url, content[:500], date_str, full_content=content,
+                ))
+
+    print(f"  fetch_adzuna: {total} returned → {len(out)} matched IC-PM title")
     return out
 
 
@@ -743,12 +840,19 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
     except Exception as e:
         print(f"  [themuse] skipped: {e}", file=sys.stderr)
 
-    # ── Remotive: second live source — fresh US-remote Product roles ──────────
+    # ── Remotive: fresh US-remote Product roles ───────────────────────────────
     print("Querying Remotive for fresh US-remote Product roles…")
     try:
         raw.extend(fetch_remotive())
     except Exception as e:
         print(f"  [remotive] skipped: {e}", file=sys.stderr)
+
+    # ── Adzuna: broad US keyword search — no slug list, indexes all employers ──
+    print("Querying Adzuna for US Product Manager roles…")
+    try:
+        raw.extend(fetch_adzuna())
+    except Exception as e:
+        print(f"  [adzuna] skipped: {e}", file=sys.stderr)
 
     # ── freshness filter: drop stale postings with a known age > MAX_AGE_DAYS ──
     def _too_old(j: dict) -> bool:
