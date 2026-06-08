@@ -1,0 +1,43 @@
+name: Daily PM Role Scrape
+
+on:
+  schedule:
+    - cron: '30 11 * * *'  # 7:30am ET (UTC-4 summer) / 6:30am ET (UTC-5 winter)
+  workflow_dispatch:        # allow manual trigger from GitHub UI
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install google-api-python-client google-auth-oauthlib
+
+      - name: Write Adzuna credentials
+        run: |
+          echo "${{ secrets.ADZUNA_APP_ID }}" > adzuna_key.txt
+          echo "${{ secrets.ADZUNA_APP_KEY }}" >> adzuna_key.txt
+
+      - name: Run scraper
+        run: python3 pmfarm.py
+
+      - name: Build HTML
+        run: python3 build_page.py
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pm_roles.html pm_roles.csv gmail_applied.txt 2>/dev/null || true
+          git diff --cached --quiet && echo "No changes" || \
+            git commit -m "daily update $(date -u +%Y-%m-%d)" && git push
