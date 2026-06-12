@@ -112,7 +112,11 @@ def _is_priority(row: dict) -> bool:
 
 
 def _loc_rank(lc: str) -> int:
-    return {"nyc": 0, "remote+nyc": 1, "remote": 2, "international": 3, "unknown": 4}.get(lc, 5)
+    return {
+        "nyc": 0, "sf": 0, "nyc+sf": 0,
+        "remote+nyc": 1, "remote+sf": 1, "remote+nyc+sf": 1,
+        "remote": 2, "international": 3, "unknown": 4,
+    }.get(lc, 5)
 
 
 def _age(row: dict) -> int:
@@ -141,8 +145,12 @@ def _years_line(row: dict) -> str:
     return "not stated"
 
 
-LOC_LABEL = {"nyc": "NYC", "remote+nyc": "NYC / Remote", "remote": "Remote",
-             "international": "International", "unknown": "Location n/a"}
+LOC_LABEL = {
+    "nyc": "NYC", "remote+nyc": "NYC / Remote", "remote": "Remote",
+    "sf": "SF", "remote+sf": "SF / Remote", "nyc+sf": "NYC / SF",
+    "remote+nyc+sf": "NYC / SF / Remote",
+    "international": "International", "unknown": "Location n/a",
+}
 
 
 def _age_label(row: dict) -> str:
@@ -153,8 +161,12 @@ def _age_label(row: dict) -> str:
     return f"{a}d ago"
 
 
-LOC_PILL = {"nyc": "NYC", "remote+nyc": "NYC · Remote", "remote": "Remote",
-            "international": "Intl", "unknown": "—"}
+LOC_PILL = {
+    "nyc": "NYC", "remote+nyc": "NYC · Remote", "remote": "Remote",
+    "sf": "SF", "remote+sf": "SF · Remote", "nyc+sf": "NYC · SF",
+    "remote+nyc+sf": "NYC · SF · Remote",
+    "international": "Intl", "unknown": "—",
+}
 
 
 _ROLE_LABELS = {"pm": "PM", "tpm": "TPM", "se": "SE", "sa": "SA", "fde": "FDE", "ops": "Ops"}
@@ -209,8 +221,12 @@ def _render_bucket(rows: list) -> str:
     """Render cards with section dividers between freshness×location groups.
     Dividers carry data-sec so JS can hide a heading when all its cards filter out."""
     AGE_LABELS = ["🟢 This week", "🟡 1–3 weeks ago", "🔴 3+ weeks ago"]
-    LOC_LABELS = {"nyc": "NYC only", "remote+nyc": "NYC + Remote", "remote": "Remote",
-                  "international": "International", "unknown": "Location TBD"}
+    LOC_LABELS = {
+        "nyc": "NYC only", "remote+nyc": "NYC + Remote", "remote": "Remote",
+        "sf": "SF only", "remote+sf": "SF + Remote",
+        "nyc+sf": "NYC + SF", "remote+nyc+sf": "NYC + SF + Remote",
+        "international": "International", "unknown": "Location TBD",
+    }
     parts = []
     last_key = None
     sec_id = 0
@@ -302,6 +318,10 @@ def build():
   .pl-nyc {{ background:#eff6ff; color:#1d4ed8; }}
   .pl-remote {{ background:#f0fdf4; color:#15803d; }}
   .pl-remote\\+nyc {{ background:#eef2ff; color:#4338ca; }}
+  .pl-sf {{ background:#fff8f1; color:#b45309; }}
+  .pl-remote\\+sf {{ background:#fefce8; color:#92400e; }}
+  .pl-nyc\\+sf {{ background:#f0f9ff; color:#0369a1; }}
+  .pl-remote\\+nyc\\+sf {{ background:#f0f9ff; color:#0369a1; }}
   .pl-international {{ background:#fdf4ff; color:#a21caf; }}
   .pl-pri {{ background:#eff6ff; color:#1d4ed8; }}
   .pl-hw {{ background:#fff7ed; color:#c2410c; }}
@@ -349,6 +369,7 @@ def build():
     <button class="chip" data-f="sa"       aria-pressed="false">SA</button>
     <button class="chip" data-f="ops"      aria-pressed="false">Ops</button>
     <button class="chip" data-f="nyc"      aria-pressed="false">NYC</button>
+    <button class="chip" data-f="sf"       aria-pressed="false">SF</button>
     <button class="chip" data-f="remote"   aria-pressed="false">Remote</button>
     <button class="chip" data-f="fresh"    aria-pressed="false">🟢 This week</button>
     <button class="chip" data-f="priority" aria-pressed="false">★ Priority</button>
@@ -389,12 +410,13 @@ def build():
   const active = new Set();
 
   const ROLE_TYPES = ['pm','tpm','fde','se','sa','ops'];
-  const LOC_TYPES  = ['nyc','remote','intl'];
+  const LOC_TYPES  = ['nyc','sf','remote','intl'];
 
   function locMatch(card, f) {{
     const lc = card.dataset.loc;
-    if (f === 'nyc')    return lc === 'nyc' || lc === 'remote+nyc';
-    if (f === 'remote') return lc === 'remote' || lc === 'remote+nyc';
+    if (f === 'nyc')    return ['nyc','remote+nyc','nyc+sf','remote+nyc+sf'].includes(lc);
+    if (f === 'sf')     return ['sf','remote+sf','nyc+sf','remote+nyc+sf'].includes(lc);
+    if (f === 'remote') return lc.startsWith('remote');
     if (f === 'intl')   return lc === 'international';
     return true;
   }}

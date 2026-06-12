@@ -40,18 +40,24 @@ _HARD_SENIOR_RE = re.compile(
 )
 
 NYC_LOCS    = ["new york", "nyc", "brooklyn", "manhattan"]
+SF_LOCS     = [
+    "san francisco", "bay area", "silicon valley", "south bay", "east bay",
+    "palo alto", "mountain view", "menlo park", "redwood city",
+    "san jose", "cupertino", "santa clara", "sunnyvale",
+    "san mateo", "foster city", "burlingame", "pleasanton", "san carlos",
+    "oakland",
+]
 REMOTE_LOCS = ["remote", "united states", "anywhere", "nationwide",
                "distributed", "work from anywhere", "work from home"]
 
-# Specific US metros that are NOT NYC. If a location names one of these
-# cities without also saying "remote", the role is in-office outside NYC
-# and gets loc_class="unknown" (excluded by default).
+# Non-target US metros. A location naming one of these (without "remote") gets
+# loc_class="unknown" and is excluded by default. SF metro cities were removed —
+# they are now a target geography detected by SF_LOCS above.
 _US_NON_NYC = [
-    "san francisco", "seattle", "chicago", "austin", "boston",
+    "seattle", "chicago", "austin", "boston",
     "los angeles", "denver", "atlanta", "portland", "miami",
-    "dallas", "houston", "phoenix", "san jose", "pleasanton",
-    "palo alto", "mountain view", "menlo park", "redwood city",
-    "san carlos", "bellevue", "kirkland", "cambridge", "pittsburgh",
+    "dallas", "houston", "phoenix",
+    "bellevue", "kirkland", "cambridge", "pittsburgh",
     "philadelphia", "minneapolis", "nashville", "charlotte", "raleigh",
     "salt lake city", "san diego", "las vegas", "tampa", "orlando",
     "detroit", "cleveland", "cincinnati", "indianapolis", "st. louis",
@@ -283,29 +289,34 @@ def _loc_class(location: str, snippet: str = "") -> str:
     # Classification uses only the location field, not the JD snippet, to prevent
     # body text like "remote work options" from misclassifying in-office roles.
     loc_lower = location.lower()
-    has_nyc             = any(n in loc_lower for n in NYC_LOCS)
+    has_nyc = any(n in loc_lower for n in NYC_LOCS)
+    has_sf  = any(s in loc_lower for s in SF_LOCS)
 
-    # A named foreign country/region makes this international regardless of
-    # "remote" — "Remote - Canada" is not a US-remote role.
+    # A named foreign country/region makes this international unless it also names
+    # a target city — "London + San Francisco" is still a SF role.
     has_intl = any(m in loc_lower for m in _INTL_MARKERS)
-    if has_intl and not has_nyc:
+    if has_intl and not has_nyc and not has_sf:
         return "international"
 
     # Explicit "remote" in the location field always wins.
     has_explicit_remote = "remote" in loc_lower
 
-    # Generic US location terms only count when no specific non-NYC city is present,
-    # preventing "San Francisco, United States" from matching as remote.
-    has_non_nyc_us = any(c in loc_lower for c in _US_NON_NYC)
-    has_us_generic = (not has_non_nyc_us) and any(r in loc_lower for r in REMOTE_LOCS)
+    # Generic US terms only count when no specific non-target city is present,
+    # preventing "Seattle, United States" from matching as remote.
+    has_non_target_us = any(c in loc_lower for c in _US_NON_NYC)
+    has_us_generic    = (not has_non_target_us) and any(r in loc_lower for r in REMOTE_LOCS)
 
     has_remote = has_explicit_remote or has_us_generic
 
-    if has_remote and has_nyc: return "remote+nyc"
-    if has_remote:             return "remote"
-    if has_nyc:                return "nyc"
-    if has_non_nyc_us:         return "unknown"
-    if location.strip():       return "international"
+    if has_remote and has_nyc and has_sf: return "remote+nyc+sf"
+    if has_remote and has_nyc:            return "remote+nyc"
+    if has_remote and has_sf:             return "remote+sf"
+    if has_remote:                        return "remote"
+    if has_nyc    and has_sf:             return "nyc+sf"
+    if has_nyc:                           return "nyc"
+    if has_sf:                            return "sf"
+    if has_non_target_us:                 return "unknown"
+    if location.strip():                  return "international"
     return "unknown"
 
 
@@ -333,17 +344,11 @@ def _passes_title(title: str) -> bool:
 
 
 def _passes_location(lc: str, remote_only: bool, include_unknown: bool = False) -> bool:
-    """Determine whether a role's loc_class passes the geo filter.
-
-    Default (no flags): only remote, remote+nyc, nyc pass. unknown is excluded
-    because an unclassified location is not a confirmed NYC/remote match — it is
-    a data gap that can silently include SF-only or international roles.
-    Use --include-unknown-loc to opt in to unknown-location roles.
-    """
     if remote_only:
-        allowed = {"remote", "remote+nyc"}
+        allowed = {"remote", "remote+nyc", "remote+sf", "remote+nyc+sf"}
     else:
-        allowed = {"remote", "remote+nyc", "nyc"}
+        allowed = {"remote", "remote+nyc", "nyc",
+                   "sf", "remote+sf", "nyc+sf", "remote+nyc+sf"}
     if include_unknown:
         allowed.add("unknown")
     return lc in allowed
@@ -534,6 +539,7 @@ def fetch_themuse(pages: int = 3) -> list[dict]:
 
     location_passes = [
         ("New York, NY",       "NYC"),
+        ("San Francisco, CA",  "SF"),
         ("Flexible / Remote",  "remote"),
     ]
     # Categories that cover all target role types.
@@ -546,7 +552,7 @@ def fetch_themuse(pages: int = 3) -> list[dict]:
 
     for location_filter, loc_label in location_passes:
         for category in categories:
-            # Skip Engineering/Sales remote pass — remote ops/eng roles are thin;
+            # Skip Engineering/Sales remote pass — thin results there;
             # Adzuna/Remotive cover remote SE/SA better.
             if loc_label == "remote" and category in ("Engineering", "Sales"):
                 continue
@@ -705,7 +711,8 @@ def fetch_adzuna(pages_per_search: int = 2) -> list[dict]:
 
     searches = (
         [{"what_phrase": t, "where": "New York City, NY"} for t in _ADZUNA_NYC] +
-        [{"what_phrase": t}                                for t in _ADZUNA_NATIONAL]
+        [{"what_phrase": t, "where": "San Francisco, CA"} for t in _ADZUNA_NYC] +
+        [{"what_phrase": t}                               for t in _ADZUNA_NATIONAL]
     )
 
     for search_params in searches:
@@ -755,7 +762,11 @@ def fetch_adzuna(pages_per_search: int = 2) -> list[dict]:
 # ── output ─────────────────────────────────────────────────────────────────────
 
 def _sort_key(j: dict) -> tuple:
-    loc_order = {"remote": 0, "remote+nyc": 1, "nyc": 2, "unknown": 3}
+    loc_order = {
+        "remote": 0, "remote+nyc": 1, "remote+sf": 1, "remote+nyc+sf": 1,
+        "nyc": 2, "sf": 2, "nyc+sf": 2,
+        "unknown": 3,
+    }
     order = loc_order.get(j["loc_class"], 4)
     try:
         age = int(j["days_old"])
@@ -842,7 +853,7 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
         print(f"  [remotive] skipped: {e}", file=sys.stderr)
 
     # ── Adzuna: broad US keyword search — all target role types ──────────────
-    print("Querying Adzuna for US roles (all types, NYC + nationwide)…")
+    print("Querying Adzuna for US roles (all types, NYC + SF + nationwide)…")
     try:
         raw.extend(fetch_adzuna())
     except Exception as e:
@@ -896,10 +907,13 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
         if len(gmail_skipped) > 10:
             print(f"  … and {len(gmail_skipped) - 10} more")
 
-    nyc_count     = sum(1 for j in filtered if j["loc_class"] == "nyc")
-    remote_count  = sum(1 for j in filtered if j["loc_class"] in ("remote", "remote+nyc"))
+    _NYC_CLASSES = {"nyc", "remote+nyc", "nyc+sf", "remote+nyc+sf"}
+    _SF_CLASSES  = {"sf",  "remote+sf",  "nyc+sf", "remote+nyc+sf"}
+    nyc_count    = sum(1 for j in filtered if j["loc_class"] in _NYC_CLASSES)
+    sf_count     = sum(1 for j in filtered if j["loc_class"] in _SF_CLASSES)
+    remote_count = sum(1 for j in filtered if "remote" in j["loc_class"])
     print(f"\n{len(raw)} title-matched → {len(filtered)} after location "
-          f"(NYC={nyc_count} remote={remote_count} excluded-unknown={excluded_unknown}) "
+          f"(NYC={nyc_count} SF={sf_count} remote={remote_count} excluded-unknown={excluded_unknown}) "
           f"→ {len(url_deduped)} after URL-dedupe → {len(jobs)} after Gmail-dedupe")
     if skipped_url:
         print(f"(also skipped {skipped_url} by applied.csv URL/name match)")
