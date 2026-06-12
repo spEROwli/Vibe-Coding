@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """
-pmfarm.py — PM role scraper: Greenhouse · Ashby · Lever
+pmfarm.py — role scraper: Greenhouse · Ashby · Lever · The Muse · Remotive · Adzuna
 
-  python3 pmfarm.py [--remote-only] [--all-levels] [--include-unknown-loc]
+  python3 pmfarm.py [--remote-only] [--include-unknown-loc]
 
+Targets: Product Manager, APM, Technical Program Manager, Forward Deployed Engineer,
+         Solutions Engineer, Solutions Architect, Business Operations, Strategy & Ops.
+NYC hard constraint + US remote. Experience bar: 0-3 yrs stated or unstated.
 All data comes from live ATS JSON APIs. See SCRAPER_RULES.md.
 Dedupe: gmail_applied.txt (primary) + applied.csv (fallback).
 """
@@ -13,27 +16,23 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # ── FILTERS ──────────────────────────────────────────────────────────────────
 TITLE_MUST_INCLUDE = [
+    # Product Management
     "product manager", "associate product", "technical product",
     "hardware product", "apm program", "rotational product",
+    # Technical Program Management
+    "technical program manager",
+    # Forward Deployed Engineering
+    "forward deployed engineer", "forward deployed",
+    # Solutions
+    "solutions engineer", "solutions architect",
+    # Operations
+    "business operations", "strategy and operations",
+    "strategy & operations", "biz ops", "bizops", "strat ops",
 ]
-TITLE_EXCLUDE      = ["marketing", "program manager", "product marketing"]
+TITLE_EXCLUDE = ["marketing", "product marketing"]
 
-# Word-boundary regex — "lead" must not match "leadership", "staff" not "staffing", etc.
-# (?<!\w) / (?!\w) are lookaround equivalents of \b that work around "sr." having a
-# non-word char at the end.
-_SENIORITY_RE = re.compile(
-    r'(?<!\w)(?:senior|sr\.?|staff|principal|lead|director|vp|vice\s+president)(?!\w)'
-    r'|(?<!\w)head\s+of\b'
-    r'|(?<!\w)group\s+product\b'
-    r'|\b(?:ii|iii)(?:\s|$)',
-    re.IGNORECASE,
-)
-
-# Executive/level markers that are disqualifying NO MATTER where they appear in
-# the title — after a comma, a dash, or a slash ("Product Manager, VP",
-# "PM - Vice President", "… Senior Associate / Vice President"). These roles are
-# dropped entirely (never written to the CSV), even under --all-levels, because
-# they are categorically above the IC bar this tool targets.
+# Executive/level markers that disqualify regardless of where they appear —
+# VP/Director/Principal/Staff are categorically above the IC bar this tool targets.
 _HARD_SENIOR_RE = re.compile(
     r'(?<!\w)(?:vice\s+president|vp|svp|evp|senior\s+associate|head\s+of|'
     r'principal|staff|director|managing\s+director|md)(?!\w)',
@@ -321,31 +320,16 @@ def _days_old(date_str: str | None) -> str:
         return "unknown"
 
 
-# When True, the seniority gate is disabled so Senior/Staff/Principal/Lead PM
-# roles are kept too. Set via --all-levels for candidates with the experience to
-# clear higher bars who want maximum coverage.
-INCLUDE_SENIOR = False
-
-
 def _passes_title(title: str) -> bool:
     t = title.lower()
     if not any(kw in t for kw in TITLE_MUST_INCLUDE):
         return False
     if any(kw in t for kw in TITLE_EXCLUDE):
         return False
-    # Hard executive markers (VP/Director/Principal/Staff/Senior Associate/MD)
-    # disqualify anywhere in the title and are NOT overridable by --all-levels.
+    # Hard executive markers (VP/Director/Principal/Staff/MD) disqualify anywhere.
     if _HARD_SENIOR_RE.search(t):
         return False
-    if INCLUDE_SENIOR:
-        return True
-    # Check seniority only in the pre-comma segment: "Product Manager, Senior Care"
-    # has "Senior" in the specialty area, not the level.  Real seniority markers
-    # ("Senior Product Manager", "Lead PM") always precede the role noun.
-    # Exception: roman-numeral suffixes like "II"/"III" appear after the role noun
-    # with no comma, so parts[0] still catches them ("Product Manager II").
-    main = t.split(",", 1)[0]
-    return not _SENIORITY_RE.search(main)
+    return True
 
 
 def _passes_location(lc: str, remote_only: bool, include_unknown: bool = False) -> bool:
@@ -538,142 +522,135 @@ def fetch_lever(slug: str) -> list[dict]:
     return out
 
 
-# ── The Muse (public API; cross-company, NYC + Product Management filtered) ────
-# Unlike the fixed Greenhouse/Lever slug list, The Muse indexes thousands of
-# companies and filters server-side by category + location + date. No auth, no
-# Cloudflare — works from a plain script. This is the source that delivers FRESH,
-# NYC, on-target roles instead of the same stale big-company pool.
+# ── The Muse (public API; cross-company, NYC + multiple categories) ────────────
+# Filters server-side by category + location. We query several categories so that
+# SE/SA/FDE/Ops roles appear alongside PM roles. _passes_title() handles precision.
 # Docs: https://www.themuse.com/developers/api/v2
-def fetch_themuse(pages: int = 4) -> list[dict]:
+def fetch_themuse(pages: int = 3) -> list[dict]:
     base = "https://www.themuse.com/api/public/jobs"
     out: list[dict] = []
     seen_urls: set[str] = set()
     total = 0
 
-    # Two passes: NYC and Flexible/Remote — The Muse filters server-side by category,
-    # giving high precision. Deduped within this fetch by apply URL.
-    searches = [
+    location_passes = [
         ("New York, NY",       "NYC"),
         ("Flexible / Remote",  "remote"),
     ]
+    # Categories that cover all target role types.
+    categories = [
+        "Product Management",   # PM / APM / TPM
+        "Engineering",          # TPM / FDE / SE / SA
+        "Operations",           # BizOps / StratOps
+        "Sales",                # SE / SA often appear here
+    ]
 
-    for location_filter, label in searches:
-        for page in range(pages):
-            params = {
-                "category":   "Product Management",
-                "location":   location_filter,
-                "page":       page,
-                "descending": "true",
-            }
-            url  = base + "?" + urllib.parse.urlencode(params)
-            data = _fetch(url)
-            if not isinstance(data, dict):
-                print(f"  [themuse] no/blocked response on page {page} ({label})",
-                      file=sys.stderr)
-                break
-            results = data.get("results", [])
-            if not results:
-                break
-            total += len(results)
-            for j in results:
-                title = j.get("name", "")
-                if not _passes_title(title):
-                    continue
-                apply_url = (j.get("refs") or {}).get("landing_page", "")
-                if not apply_url:
-                    continue
-                nu = _norm_url(apply_url)
-                if nu in seen_urls:
-                    continue
-                seen_urls.add(nu)
-                company  = (j.get("company") or {}).get("name", "") or "(unknown)"
-                location = ", ".join(l.get("name", "") for l in j.get("locations", []))
-                content  = _strip_html(j.get("contents", ""))
-                date     = j.get("publication_date")
-                out.append(_make_job(
-                    "TheMuse", company, title, location,
-                    apply_url, content[:500], date, full_content=content,
-                ))
-            if page + 1 >= data.get("page_count", pages + 1):
-                break
+    for location_filter, loc_label in location_passes:
+        for category in categories:
+            # Skip Engineering/Sales remote pass — remote ops/eng roles are thin;
+            # Adzuna/Remotive cover remote SE/SA better.
+            if loc_label == "remote" and category in ("Engineering", "Sales"):
+                continue
+            for page in range(pages):
+                params = {
+                    "category":   category,
+                    "location":   location_filter,
+                    "page":       page,
+                    "descending": "true",
+                }
+                url  = base + "?" + urllib.parse.urlencode(params)
+                data = _fetch(url)
+                if not isinstance(data, dict):
+                    print(f"  [themuse] no/blocked response ({category}/{loc_label} p{page})",
+                          file=sys.stderr)
+                    break
+                results = data.get("results", [])
+                if not results:
+                    break
+                total += len(results)
+                for j in results:
+                    title = j.get("name", "")
+                    if not _passes_title(title):
+                        continue
+                    apply_url = (j.get("refs") or {}).get("landing_page", "")
+                    if not apply_url:
+                        continue
+                    nu = _norm_url(apply_url)
+                    if nu in seen_urls:
+                        continue
+                    seen_urls.add(nu)
+                    company  = (j.get("company") or {}).get("name", "") or "(unknown)"
+                    location = ", ".join(l.get("name", "") for l in j.get("locations", []))
+                    content  = _strip_html(j.get("contents", ""))
+                    date     = j.get("publication_date")
+                    out.append(_make_job(
+                        "TheMuse", company, title, location,
+                        apply_url, content[:500], date, full_content=content,
+                    ))
+                if page + 1 >= data.get("page_count", pages + 1):
+                    break
 
-    print(f"  fetch_themuse: {total} returned → {len(out)} matched IC-PM title")
+    print(f"  fetch_themuse: {total} returned → {len(out)} matched title filter")
     return out
 
 
 # ── Remotive (public API; remote-first job board, no auth, no Cloudflare) ──────
-# Second live source, complementing The Muse. Remotive is remote-only, so this
-# deepens the US-REMOTE half of the goal (The Muse covers NYC). Every role is
-# remote; we keep only those a US-based candidate can take (USA / North America /
-# Worldwide / Anywhere) and drop region-locked foreign listings. No API key.
+# Remote-only source. We run multiple searches to cover all target role types.
+# Every role is remote; we keep only those a US-based candidate can take.
 # Docs: https://github.com/remotive-com/remote-jobs-api
 _REMOTIVE_US_OK = [
     "usa", "u.s.", "united states", "north america", "americas",
     "worldwide", "anywhere", "global", "remote",
 ]
 
+_REMOTIVE_SEARCHES = [
+    "product+manager",
+    "solutions+engineer",
+    "solutions+architect",
+    "technical+program+manager",
+    "forward+deployed",
+    "business+operations",
+    "strategy+operations",
+]
 
-def fetch_remotive(limit: int = 100) -> list[dict]:
-    # Query by search term, not category: the "product" category is a small,
-    # senior-heavy feed (Product Designer / Owner / Senior PM) that filters to
-    # nothing. A "product manager" search returns actual PM-titled roles across
-    # every category, giving the IC title filter something to keep.
-    url  = ("https://remotive.com/api/remote-jobs"
-            f"?search=product+manager&limit={limit}")
-    data = _fetch(url)
-    if not isinstance(data, dict):
-        print("  [remotive] no/blocked response (check network)", file=sys.stderr)
-        return []
-    jobs = data.get("jobs", [])
-    out, total = [], len(jobs)
-    for j in jobs:
-        title = j.get("title", "")
-        if not _passes_title(title):
+
+def fetch_remotive(limit: int = 50) -> list[dict]:
+    out: list[dict] = []
+    seen_urls: set[str] = set()
+    grand_total = 0
+
+    for term in _REMOTIVE_SEARCHES:
+        url  = f"https://remotive.com/api/remote-jobs?search={term}&limit={limit}"
+        data = _fetch(url)
+        if not isinstance(data, dict):
+            print(f"  [remotive] no/blocked response for {term!r}", file=sys.stderr)
             continue
-        apply_url = j.get("url", "")
-        if not apply_url:
-            continue
-        region = (j.get("candidate_required_location", "") or "").strip()
-        # US-eligibility gate: keep only regions a US candidate can work from.
-        rlow = region.lower()
-        if region and not any(ok in rlow for ok in _REMOTIVE_US_OK):
-            continue
-        company  = j.get("company_name", "") or "(unknown)"
-        # All Remotive roles are remote — prefix so _loc_class reads "remote".
-        location = f"Remote — {region}" if region else "Remote"
-        content  = _strip_html(j.get("description", ""))
-        date     = j.get("publication_date")   # ISO-8601, e.g. 2026-06-01T12:00:00
-        out.append(_make_job(
-            "Remotive", company, title, location,
-            apply_url, content[:500], date, full_content=content,
-        ))
-    print(f"  fetch_remotive: {total} returned → {len(out)} matched IC-PM + US-remote")
-    if total and not out:
-        # Diagnostic: show why the first few were dropped so we can tune the filter.
-        print("  [remotive-debug] filter breakdown on first 20 jobs:")
-        counts: dict[str, int] = {}
-        for j in (jobs[:20]):
-            title  = j.get("title", "")
+        jobs = data.get("jobs", [])
+        grand_total += len(jobs)
+        for j in jobs:
+            title = j.get("title", "")
+            if not _passes_title(title):
+                continue
+            apply_url = j.get("url", "")
+            if not apply_url:
+                continue
+            nu = _norm_url(apply_url)
+            if nu in seen_urls:
+                continue
+            seen_urls.add(nu)
             region = (j.get("candidate_required_location", "") or "").strip()
-            t      = title.lower()
-            rlow   = region.lower()
-            if not title:
-                reason = "no-title"
-            elif not any(kw in t for kw in TITLE_MUST_INCLUDE):
-                reason = f"must-include-miss"
-            elif any(kw in t for kw in TITLE_EXCLUDE):
-                reason = "excluded-kw"
-            elif _HARD_SENIOR_RE.search(t):
-                reason = "hard-senior"
-            elif _SENIORITY_RE.search(t.split(",", 1)[0]):
-                reason = "soft-senior"
-            elif region and not any(ok in rlow for ok in _REMOTIVE_US_OK):
-                reason = "non-us-region"
-            else:
-                reason = "passed-all?"
-            counts[reason] = counts.get(reason, 0) + 1
-            print(f"    {reason:20s}  {title!r}  [{region}]")
-        print(f"  [remotive-debug] summary: {counts}")
+            rlow = region.lower()
+            if region and not any(ok in rlow for ok in _REMOTIVE_US_OK):
+                continue
+            company  = j.get("company_name", "") or "(unknown)"
+            location = f"Remote — {region}" if region else "Remote"
+            content  = _strip_html(j.get("description", ""))
+            date     = j.get("publication_date")
+            out.append(_make_job(
+                "Remotive", company, title, location,
+                apply_url, content[:500], date, full_content=content,
+            ))
+
+    print(f"  fetch_remotive: {grand_total} returned → {len(out)} matched title + US-remote")
     return out
 
 
@@ -693,7 +670,28 @@ def _load_adzuna_creds() -> tuple[str, str] | None:
         return None
 
 
-def fetch_adzuna(pages_per_search: int = 4) -> list[dict]:
+# NYC-targeted search terms (all target role types).
+_ADZUNA_NYC = [
+    "product manager",
+    "associate product manager",
+    "technical program manager",
+    "solutions engineer",
+    "solutions architect",
+    "forward deployed engineer",
+    "business operations",
+    "strategy and operations",
+]
+
+# Nationwide search terms (remote discovery — subset most likely to be remote).
+_ADZUNA_NATIONAL = [
+    "product manager",
+    "technical program manager",
+    "solutions engineer",
+    "solutions architect",
+]
+
+
+def fetch_adzuna(pages_per_search: int = 2) -> list[dict]:
     creds = _load_adzuna_creds()
     if not creds:
         print("  [adzuna] skipped: adzuna_key.txt missing or malformed", file=sys.stderr)
@@ -705,13 +703,10 @@ def fetch_adzuna(pages_per_search: int = 4) -> list[dict]:
     seen_urls: set[str] = set()
     total = 0
 
-    # Two targeted searches: NYC (location-anchored) + nationwide (remote discovery).
-    # The nationwide pass uses no `where` so Adzuna returns all US results; our
-    # existing _loc_class() then keeps only remote/remote+nyc classified roles.
-    searches = [
-        {"what_phrase": "product manager", "where": "New York City, NY"},
-        {"what_phrase": "product manager"},
-    ]
+    searches = (
+        [{"what_phrase": t, "where": "New York City, NY"} for t in _ADZUNA_NYC] +
+        [{"what_phrase": t}                                for t in _ADZUNA_NATIONAL]
+    )
 
     for search_params in searches:
         for page in range(1, pages_per_search + 1):
@@ -747,13 +742,13 @@ def fetch_adzuna(pages_per_search: int = 4) -> list[dict]:
                 company  = (j.get("company") or {}).get("display_name", "") or "(unknown)"
                 location = (j.get("location") or {}).get("display_name", "") or ""
                 content  = _strip_html(j.get("description", ""))
-                date_str = j.get("created")   # ISO-8601 e.g. "2026-06-01T12:00:00Z"
+                date_str = j.get("created")
                 out.append(_make_job(
                     "Adzuna", company, title, location,
                     apply_url, content[:500], date_str, full_content=content,
                 ))
 
-    print(f"  fetch_adzuna: {total} returned → {len(out)} matched IC-PM title")
+    print(f"  fetch_adzuna: {total} returned → {len(out)} matched title filter")
     return out
 
 
@@ -833,21 +828,21 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
     # ── The Muse: fresh NYC Product-Management roles across all companies
     #    (primary source of relevance — the fixed ATS list above is supplementary;
     #    hiring.cafe is unusable: fully behind Cloudflare bot protection) ────────
-    print("\nQuerying The Muse for fresh NYC Product Management roles…")
+    print("\nQuerying The Muse for NYC roles (PM/TPM/FDE/SE/SA/Ops)…")
     try:
         raw.extend(fetch_themuse())
     except Exception as e:
         print(f"  [themuse] skipped: {e}", file=sys.stderr)
 
-    # ── Remotive: fresh US-remote Product roles ───────────────────────────────
-    print("Querying Remotive for fresh US-remote Product roles…")
+    # ── Remotive: fresh US-remote roles across all target types ──────────────
+    print("Querying Remotive for US-remote roles…")
     try:
         raw.extend(fetch_remotive())
     except Exception as e:
         print(f"  [remotive] skipped: {e}", file=sys.stderr)
 
-    # ── Adzuna: broad US keyword search — no slug list, indexes all employers ──
-    print("Querying Adzuna for US Product Manager roles…")
+    # ── Adzuna: broad US keyword search — all target role types ──────────────
+    print("Querying Adzuna for US roles (all types, NYC + nationwide)…")
     try:
         raw.extend(fetch_adzuna())
     except Exception as e:
@@ -941,20 +936,15 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
 
 def main():
     p = argparse.ArgumentParser(
-        description="PM role scraper — Greenhouse, Ashby, Lever",
+        description="Role scraper — PM · TPM · FDE · SE · SA · BizOps · StratOps",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
     p.add_argument("--remote-only", action="store_true",
                    help="Remote/US-wide roles only; drop NYC-specific listings")
-    p.add_argument("--all-levels", action="store_true",
-                   help="Keep Senior/Staff/Principal/Lead PM roles too (no seniority filter)")
     p.add_argument("--include-unknown-loc", action="store_true",
-                   help="Include roles whose location could not be classified (may include non-NYC/non-remote)")
+                   help="Include roles whose location could not be classified")
     args = p.parse_args()
-
-    global INCLUDE_SENIOR
-    INCLUDE_SENIOR = args.all_levels
 
     cmd_local(args.remote_only, args.include_unknown_loc)
 

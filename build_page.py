@@ -5,24 +5,18 @@ build_page.py — Turn pm_roles.csv into a triage-first apply page.
   python3 build_page.py                 # reads pm_roles.csv → writes pm_roles.html
   python3 build_page.py FILE.csv OUT.html
 
-Layout (per the 10-week triage spec):
-  • Primary split: Bucket A (in-range) on top, Bucket B (everything else) collapsed.
-      A = title has no Senior/Staff/Principal/Director/Lead marker AND years ≤3
-          or "not stated".  This is the bucket you live in.
-  • Within A, sort by FIT, not date:
-      1) unlock sectors first (healthtech, fintech, regulated, hardware/IoT, founding)
-      2) then NYC → remote → other
-      3) then newest post date as tiebreak
-  • Four fields per card: company+title · location · verbatim years sentence · link.
+Layout:
+  • Primary split: Bucket A (in-range) on top, Bucket B (4+ yrs explicit) collapsed.
+      A = years ≤3 stated OR unstated.
+  • Within A, sort by FIT: freshness → priority sector → NYC/remote → date.
+  • Role type filter chips: PM · TPM · FDE · SE · SA · Ops.
 
 SCRAPER_RULES: every card is rendered straight from pm_roles.csv, which the
 scraper fills only from live ATS JSON. The years line is the verbatim JD sentence
-(years_sentence column) or "not stated" — never a bucket or a guess. If that
-column is missing, regenerate the CSV with an updated pmfarm.py before trusting it.
+(years_sentence column) or "not stated" — never a bucket or a guess.
 """
 
 import csv, html, json, sys, datetime, os, re
-import pmfarm  # reuse the exact seniority regex so bucketing matches the scraper
 
 CSV_IN   = sys.argv[1] if len(sys.argv) > 1 else "pm_roles.csv"
 HTML_OUT = sys.argv[2] if len(sys.argv) > 2 else "pm_roles.html"
@@ -59,25 +53,6 @@ def _load_sector_map() -> dict:
 SECTORS = _load_sector_map()
 
 
-# Executive/level markers that mean "senior" no matter where they sit in the
-# title — after a comma or a dash ("Product Manager, VP", "PM - Vice President",
-# "..., Senior Associate / Vice President"). Checked across the whole title.
-_HARD_SENIOR_RE = re.compile(
-    r'(?<!\w)(?:vice\s+president|vp|svp|evp|senior\s+associate|head\s+of|'
-    r'principal|staff|director)(?!\w)', re.I)
-
-
-def _is_senior(title: str) -> bool:
-    """True if the title carries a seniority marker. Hard executive markers
-    (VP/Director/Principal/Staff/Senior Associate) count anywhere; softer ones
-    (Senior/Lead) only in the pre-comma segment so "Product Manager, Senior Care"
-    — where 'Senior' names the specialty, not the level — is not misflagged."""
-    t = title.lower()
-    if _HARD_SENIOR_RE.search(t):
-        return True
-    return bool(pmfarm._SENIORITY_RE.search(t.split(",", 1)[0]))
-
-
 def _years_num(years_raw: str):
     try:
         return int(years_raw)
@@ -98,13 +73,30 @@ def _years_is_soft(row: dict) -> bool:
     return any(h in s for h in _HEDGE)
 
 
+_ROLE_TYPE_MAP = [
+    ("fde",  ["forward deployed"]),
+    ("sa",   ["solutions architect"]),
+    ("se",   ["solutions engineer"]),
+    ("tpm",  ["technical program manager", "technical program"]),
+    ("ops",  ["business operations", "strategy and operations",
+              "strategy & operations", "biz ops", "bizops", "strat ops"]),
+    ("pm",   ["product manager", "associate product", "apm"]),
+]
+
+
+def _role_type(title: str) -> str:
+    t = title.lower()
+    for code, kws in _ROLE_TYPE_MAP:
+        if any(kw in t for kw in kws):
+            return code
+    return "pm"
+
+
 def _in_range(row: dict) -> bool:
-    if _is_senior(row.get("title", "")):
-        return False
     n = _years_num(row.get("years_raw", ""))
     if n is None or n <= 3:
         return True
-    # >3 yrs stated: keep it in range only if the JD hedges the number.
+    # >3 yrs stated: keep only if the JD hedges the number.
     return _years_is_soft(row)
 
 
@@ -165,6 +157,9 @@ LOC_PILL = {"nyc": "NYC", "remote+nyc": "NYC · Remote", "remote": "Remote",
             "international": "Intl", "unknown": "—"}
 
 
+_ROLE_LABELS = {"pm": "PM", "tpm": "TPM", "se": "SE", "sa": "SA", "fde": "FDE", "ops": "Ops"}
+
+
 def _card(row: dict, priority: bool) -> str:
     loc_raw  = row.get("location", "") or LOC_LABEL.get(row.get("loc_class", ""), "")
     company  = html.escape(row.get("company", "").title())
@@ -176,9 +171,14 @@ def _card(row: dict, priority: bool) -> str:
     locpill  = LOC_PILL.get(lc, "—")
     is_app   = (row.get("applied", "") or "").strip().lower() in ("y", "yes", "1", "true", "x")
     has_hw   = row.get("hw_signal") == "YES"
+    rt       = _role_type(row.get("title", ""))
+    rl       = _ROLE_LABELS.get(rt, rt.upper())
 
-    # Pill tags — dense, scannable, McMaster-style.
-    tags = [f'<span class="pill pl-{lc}">{html.escape(locpill)}</span>']
+    # Pill tags — dense, scannable.
+    tags = [
+        f'<span class="pill pl-{lc}">{html.escape(locpill)}</span>',
+        f'<span class="pill pl-role pl-rt-{rt}">{rl}</span>',
+    ]
     if priority:                         tags.append('<span class="pill pl-pri">★ priority</span>')
     if has_hw:                           tags.append('<span class="pill pl-hw">🔩 fit</span>')
     if row.get("lang_signal") == "YES":  tags.append('<span class="pill pl-lang">🌐 lang</span>')
@@ -192,7 +192,7 @@ def _card(row: dict, priority: bool) -> str:
     # data-search built from raw (un-escaped) values to avoid double-encoding.
     search   = html.escape((row.get("company", "") + " " + row.get("title", "") + " " + loc_raw).lower(), quote=True)
     hw_attr  = "1" if has_hw else "0"
-    return f"""  <div class="card{' pri' if priority else ''}{' done' if is_app else ''}" data-loc="{lc}" data-age="{ab}" data-pri="{1 if priority else 0}" data-applied="{1 if is_app else 0}" data-hw="{hw_attr}" data-search="{search}">
+    return f"""  <div class="card{' pri' if priority else ''}{' done' if is_app else ''}" data-loc="{lc}" data-age="{ab}" data-pri="{1 if priority else 0}" data-applied="{1 if is_app else 0}" data-hw="{hw_attr}" data-role="{rt}" data-search="{search}">
     <div class="top">
       <div class="co">{company}</div>
       <span class="ag {aclass}">{age_str}</span>
@@ -249,7 +249,7 @@ def build():
 <html lang="en"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>PM Roles — {today}</title>
+<title>Roles — {today}</title>
 <style>
   :root {{
     --bg:#fafafa; --card:#fff; --ink:#18181b; --muted:#71717a; --line:#e4e4e7;
@@ -306,6 +306,12 @@ def build():
   .pl-pri {{ background:#eff6ff; color:#1d4ed8; }}
   .pl-hw {{ background:#fff7ed; color:#c2410c; }}
   .pl-lang {{ background:#faf5ff; color:#7c3aed; }}
+  .pl-rt-pm  {{ background:#f0f9ff; color:#0369a1; }}
+  .pl-rt-tpm {{ background:#f0fdf4; color:#166534; }}
+  .pl-rt-se  {{ background:#fff7ed; color:#c2410c; }}
+  .pl-rt-sa  {{ background:#fdf4ff; color:#86198f; }}
+  .pl-rt-fde {{ background:#fefce8; color:#92400e; }}
+  .pl-rt-ops {{ background:#f8fafc; color:#475569; }}
 
   .ag {{ font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; flex:0 0 auto; }}
   .ag-fresh  {{ background:#dcfce7; color:#15803d; }}
@@ -331,14 +337,19 @@ def build():
 
 <header>
   <div class="htop">
-    <h1>PM Roles</h1>
+    <h1>Roles</h1>
     <span class="count" id="count">{len(bucket_a)} shown</span>
   </div>
   <input class="search" id="q" type="search" placeholder="Search company, title, location…" autocomplete="off">
   <div class="chips" id="chips">
+    <button class="chip" data-f="pm"       aria-pressed="false">PM</button>
+    <button class="chip" data-f="tpm"      aria-pressed="false">TPM</button>
+    <button class="chip" data-f="fde"      aria-pressed="false">FDE</button>
+    <button class="chip" data-f="se"       aria-pressed="false">SE</button>
+    <button class="chip" data-f="sa"       aria-pressed="false">SA</button>
+    <button class="chip" data-f="ops"      aria-pressed="false">Ops</button>
     <button class="chip" data-f="nyc"      aria-pressed="false">NYC</button>
     <button class="chip" data-f="remote"   aria-pressed="false">Remote</button>
-    <button class="chip" data-f="intl"     aria-pressed="false">Intl</button>
     <button class="chip" data-f="fresh"    aria-pressed="false">🟢 This week</button>
     <button class="chip" data-f="priority" aria-pressed="false">★ Priority</button>
     <button class="chip" data-f="fit"      aria-pressed="false">🔩 Fit</button>
@@ -347,14 +358,14 @@ def build():
 </header>
 
 <main>
-  <div class="lbl">In range · IC level · ≤3 yrs or not stated · fresh → fit</div>
+  <div class="lbl">In range · ≤3 yrs or not stated · fresh → fit</div>
   <div id="alist">
 {a_cards}
   </div>
   <div class="empty" id="empty">No roles match these filters.</div>
 
   <details>
-    <summary>▸ Stretch bucket — senior / 4+ yrs ({len(bucket_b)} roles)</summary>
+    <summary>▸ Stretch bucket — 4+ yrs stated ({len(bucket_b)} roles)</summary>
     <div id="blist">
 {b_cards}
     </div>
@@ -377,6 +388,9 @@ def build():
   const empty  = document.getElementById('empty');
   const active = new Set();
 
+  const ROLE_TYPES = ['pm','tpm','fde','se','sa','ops'];
+  const LOC_TYPES  = ['nyc','remote','intl'];
+
   function locMatch(card, f) {{
     const lc = card.dataset.loc;
     if (f === 'nyc')    return lc === 'nyc' || lc === 'remote+nyc';
@@ -387,14 +401,16 @@ def build():
 
   function apply() {{
     const term = q.value.trim().toLowerCase();
-    // Location chips are OR'd together; other chips are AND constraints.
-    const locFilters = [...active].filter(f => ['nyc','remote','intl'].includes(f));
+    // Role and location chips are OR'd within their group; other chips are AND.
+    const roleFilters = [...active].filter(f => ROLE_TYPES.includes(f));
+    const locFilters  = [...active].filter(f => LOC_TYPES.includes(f));
     let shown = 0;
 
     cards.forEach(card => {{
       let ok = true;
       if (term && !card.dataset.search.includes(term)) ok = false;
-      if (ok && locFilters.length) ok = locFilters.some(f => locMatch(card, f));
+      if (ok && roleFilters.length) ok = roleFilters.some(f => card.dataset.role === f);
+      if (ok && locFilters.length)  ok = locFilters.some(f => locMatch(card, f));
       if (ok && active.has('fresh'))       ok = card.dataset.age === '0';
       if (ok && active.has('priority'))    ok = card.dataset.pri === '1';
       if (ok && active.has('fit'))         ok = card.dataset.hw === '1';
