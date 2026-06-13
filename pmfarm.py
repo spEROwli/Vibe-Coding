@@ -19,6 +19,9 @@ TITLE_MUST_INCLUDE = [
     # Product Management
     "product manager", "associate product", "technical product",
     "hardware product", "apm program", "rotational product",
+    "product owner",
+    # Deployment (Palantir-style)
+    "deployment strategist",
     # Technical Program Management
     "technical program manager",
     # Forward Deployed Engineering
