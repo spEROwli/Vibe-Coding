@@ -973,10 +973,14 @@ def fetch_brightdata() -> list[dict]:
 
     # 4. Run the collector. API key passed via env (skips `bdata login`); never in
     #    argv (would leak in `ps`). --json for parsing, --timeout bounds a hung job.
+    # A hiring.cafe *search* URL is paginated, so a real run usually hits Scraper
+    # Studio's batch auto-fallback (longer poll). Give the CLI a generous --timeout
+    # and the subprocess a slightly longer wall-clock cap so a legit big batch isn't
+    # killed mid-poll. If it still times out, the CLI returns empty → inert, not error.
     env = dict(os.environ, BRIGHTDATA_API_KEY=api_key)
-    cmd = [BRIGHTDATA_CLI, "scraper", "run", collector_id, search_url, "--json", "--timeout", "900"]
+    cmd = [BRIGHTDATA_CLI, "scraper", "run", collector_id, search_url, "--json", "--timeout", "1800"]
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=1200)
+        proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=2000)
     except Exception as e:
         print(f"  [brightdata] run failed: {e}", file=sys.stderr)
         return []

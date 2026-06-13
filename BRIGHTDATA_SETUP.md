@@ -110,6 +110,13 @@ bdata budget balance        # confirm the spend is small/expected
 ```
 You should see `fetch_brightdata: N row(s) → M matched title filter`, and hiring.cafe
 roles in the output with **direct** apply links, correctly experience-gated and deduped.
+
+> **If the first run comes back empty:** a hiring.cafe *search* URL is paginated, so
+> the run usually hits Scraper Studio's batch auto-fallback, which can take several
+> minutes. An empty result is most likely the run still finishing / timing out — it
+> is **not** a broken collector. Just re-run (the spend lock makes the immediate
+> re-run free if the prior one billed), or widen the timeout. Only `heal` if real
+> rows come back with the *wrong fields*.
 If fields come back wrong/empty:
 ```bash
 bdata scraper heal "$COLLECTOR_ID" "<what is wrong, e.g. apply_url is the hiring.cafe page, not the company link>"

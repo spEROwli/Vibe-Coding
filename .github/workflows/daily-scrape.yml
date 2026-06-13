@@ -22,6 +22,7 @@ jobs:
 
       - name: Set up Node
         uses: actions/setup-node@v4
+        continue-on-error: true   # ATS pipeline must never fail on a Node/CLI hiccup
         with:
           node-version: '20'
 
@@ -29,6 +30,7 @@ jobs:
         run: pip install google-api-python-client google-auth-oauthlib
 
       - name: Install Bright Data CLI
+        continue-on-error: true   # brightdata is optional; if install fails, fetch_brightdata stays inert (shutil.which guard) and ATS still publishes
         run: npm install -g @brightdata/cli
 
       - name: Write Adzuna credentials
