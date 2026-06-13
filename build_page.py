@@ -303,8 +303,10 @@ def build():
            backdrop-filter:saturate(150%) blur(12px); -webkit-backdrop-filter:saturate(150%) blur(12px);
            border-bottom:.5px solid var(--line); padding:16px 18px 10px; }}
   .htop {{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }}
+  .hbrand {{ display:flex; align-items:baseline; gap:11px; min-width:0; }}
   h1 {{ font-family:var(--serif); font-size:26px; font-weight:500; letter-spacing:-.015em; color:var(--fg1); }}
   h1::after {{ content:"."; color:var(--rust); }}
+  .subtitle {{ font-family:var(--mono); font-size:11px; color:var(--fg3); white-space:nowrap; }}
   .count {{ font-family:var(--mono); font-size:11px; color:var(--fg3); font-variant-numeric:tabular-nums; }}
   .search {{ width:100%; margin-top:12px; padding:7px 0; font-family:var(--sans); font-size:14px;
             color:var(--fg1); background:transparent; border:none; border-bottom:.5px solid var(--line); outline:none; }}
@@ -377,7 +379,7 @@ def build():
 
 <header>
   <div class="htop">
-    <h1>Roles</h1>
+    <div class="hbrand"><h1>Roles</h1><span class="subtitle">{len(rows)} roles · {pri_count} priority</span></div>
     <span class="count" id="count">{len(bucket_a)} shown</span>
   </div>
   <input class="search" id="q" type="search" placeholder="Search company, title, location…" autocomplete="off">
