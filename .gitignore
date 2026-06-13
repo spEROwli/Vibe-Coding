@@ -6,6 +6,8 @@ hiringcafe_raw.json
 hiringcafe_roles.csv
 companies.db
 *_key.txt
+brightdata_key.txt
+.brightdata_last_run
 JOB_SEARCH.md
 APPLICATION_CRIB.md
 gmail_applied.txt

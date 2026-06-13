@@ -20,13 +20,31 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - name: Install dependencies
         run: pip install google-api-python-client google-auth-oauthlib
+
+      - name: Install Bright Data CLI
+        run: npm install -g @brightdata/cli
 
       - name: Write Adzuna credentials
         run: |
           echo "${{ secrets.ADZUNA_APP_ID }}" > adzuna_key.txt
           echo "${{ secrets.ADZUNA_APP_KEY }}" >> adzuna_key.txt
+
+      - name: Write Bright Data credentials
+        # 3 lines: api_key / collector_id / search_url (mirrors the ADZUNA_* pattern).
+        # Unset secrets write blank lines; _load_brightdata_creds treats blank as
+        # missing, so the source stays inert until SOURCES["brightdata"]=True is
+        # committed AND all three secrets exist. No spend until both are true.
+        run: |
+          echo "${{ secrets.BRIGHTDATA_API_KEY }}" > brightdata_key.txt
+          echo "${{ secrets.BRIGHTDATA_COLLECTOR_ID }}" >> brightdata_key.txt
+          echo "${{ secrets.BRIGHTDATA_SEARCH_URL }}" >> brightdata_key.txt
 
       - name: Run scraper
         run: python3 pmfarm.py

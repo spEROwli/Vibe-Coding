@@ -15,6 +15,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV="$HOME/.venv/pmfarm"
 PYTHON="${VENV}/bin/python3"
 
+# launchd/cron start with a minimal PATH, so the npm-global `bdata` CLI (used by
+# the optional hiring.cafe source) would not resolve. Add nvm + common bins. This
+# is a no-op when the brightdata source is off — pmfarm.py only invokes bdata then.
+for _d in "$HOME"/.nvm/versions/node/*/bin /opt/homebrew/bin /usr/local/bin; do
+  [ -d "$_d" ] && PATH="$_d:$PATH"
+done
+export PATH
+
 # Bootstrap venv on first run if it doesn't exist yet.
 if [ ! -x "$PYTHON" ]; then
   echo "  [setup] creating venv at $VENV"
@@ -54,7 +62,14 @@ if [ ! -f "$SCRIPT_DIR/companies.db" ]; then
   "$PYTHON" build_companydb.py || echo "  [warn] build_companydb.py failed — falling back to JSON cache"
 fi
 
-# 3. Scrape ATS APIs and write pm_roles.csv (IC-level only, no --all-levels).
+# 2c. Optional: materialize brightdata_key.txt from env (parity with CI). Only
+#     writes when all three vars are present; otherwise the existing local file (if
+#     any) is used. pmfarm.py stays inert unless SOURCES["brightdata"] is also True.
+if [ -n "${BRIGHTDATA_API_KEY:-}" ] && [ -n "${BRIGHTDATA_COLLECTOR_ID:-}" ] && [ -n "${BRIGHTDATA_SEARCH_URL:-}" ]; then
+  printf '%s\n%s\n%s\n' "$BRIGHTDATA_API_KEY" "$BRIGHTDATA_COLLECTOR_ID" "$BRIGHTDATA_SEARCH_URL" > brightdata_key.txt
+fi
+
+# 3. Scrape ATS APIs (and hiring.cafe if enabled) and write pm_roles.csv.
 "$PYTHON" pmfarm.py
 
 # 4. Build HTML dashboard from pm_roles.csv.

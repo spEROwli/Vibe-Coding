@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-pmfarm.py — role scraper: Greenhouse · Ashby · Lever · The Muse · Remotive · Adzuna
+pmfarm.py — role scraper: Greenhouse · Ashby · Lever (· hiring.cafe via Bright Data)
 
   python3 pmfarm.py [--remote-only] [--include-unknown-loc]
 
@@ -11,8 +11,51 @@ All data comes from live ATS JSON APIs. See SCRAPER_RULES.md.
 Dedupe: gmail_applied.txt (primary) + applied.csv (fallback).
 """
 
-import argparse, csv, datetime, html as H, json, os, re, sys, urllib.request, urllib.parse
+import argparse, csv, datetime, html as H, json, os, re, shutil, subprocess, sys, urllib.request, urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# ── SOURCES (parametric toggles) ──────────────────────────────────────────────
+# Master switch per source. Adding or tuning a source is a config edit here, not
+# surgery in cmd_local. The ATS sources (greenhouse/ashby/lever) are live; the
+# disabled aggregators (themuse/remotive/adzuna) are not toggled here because they
+# are intentionally not called at all. "brightdata" (hiring.cafe) ships OFF and
+# stays inert — zero spend — until a key + collector exist. See BRIGHTDATA_SETUP.md.
+SOURCES = {
+    "greenhouse": True,
+    "ashby":      True,
+    "lever":      True,
+    "brightdata": False,
+}
+
+# ── Bright Data / hiring.cafe credentials (gitignored, same pattern as Adzuna) ─
+# brightdata_key.txt holds three lines:
+#   line1 = BRIGHTDATA_API_KEY · line2 = BRIGHTDATA_COLLECTOR_ID · line3 = HIRINGCAFE_SEARCH_URL
+# Absent or blank → fetch_brightdata() is inert (returns []). Pay-as-you-go cost is
+# ~$1.50 / 1k page loads; the guardrails live in fetch_brightdata().
+_BRIGHTDATA_KEY_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "brightdata_key.txt")
+_BRIGHTDATA_RUN_STAMP = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".brightdata_last_run")
+BRIGHTDATA_CLI        = os.environ.get("BRIGHTDATA_CLI", "bdata")  # CLI name or absolute path
+MAX_PAGE_LOADS        = 50   # page-load budget per run (documented cap; see fetch_brightdata note)
+BRIGHTDATA_MIN_HOURS  = 20   # once-per-day spend lock: skip if a paid run ran < this many hours ago
+
+
+def _load_brightdata_creds() -> tuple[str, str, str] | None:
+    """Return (api_key, collector_id, search_url) from brightdata_key.txt, or None
+    when the file is absent or any line is blank. Blank/whitespace-only lines count
+    as missing so a CI step that echoes an *unset* secret into the file stays inert
+    rather than erroring (mirrors _load_adzuna_creds tolerance)."""
+    try:
+        lines = [ln.strip() for ln in
+                 open(_BRIGHTDATA_KEY_FILE, encoding="utf-8").read().splitlines()]
+        api_key      = lines[0] if len(lines) > 0 else ""
+        collector_id = lines[1] if len(lines) > 1 else ""
+        search_url   = lines[2] if len(lines) > 2 else ""
+        if not (api_key and collector_id and search_url):
+            return None
+        return (api_key, collector_id, search_url)
+    except Exception:
+        return None
+
 
 # ── FILTERS ──────────────────────────────────────────────────────────────────
 TITLE_MUST_INCLUDE = [
@@ -211,6 +254,22 @@ YEARS_PATTERNS = [
 # not an individual PM requirement — so it is dropped.
 YEARS_DISQUALIFY = ["combined", "collective", "total", "company-wide", "across our"]
 
+# Phrases that frame a year bar as a preferred / nice-to-have qualifier rather
+# than a hard requirement. Used by _requirement_kind so a soft LOW bar
+# ("Strongly Preferred: 2+ years") can't sink the gate below a hard HIGH bar
+# ("Required: 5+ years") — while a plain "5+ … 2+ …" with no qualifier words
+# still reads optimistically as 2 (TEST 3). Hard markers let an explicit
+# "Required"/"Minimum" clause out-vote a nearby preferred header.
+YEARS_SOFT_MARKERS = ("preferred", "preferably", "nice to have", "nice-to-have",
+                      "bonus", "ideally", "a plus", "good to have", "desired",
+                      "would be a plus", "pluses")
+YEARS_HARD_MARKERS = ("required", "requirement", "must have", "must-have",
+                      "minimum", "at least", "you must", "we require")
+
+# Sentence/clause separator. _strip_html turns every <li>/<p>/<h*> into ". ",
+# so each requirement bullet ends up as its own clause splittable on this.
+_SENT_SEP = re.compile(r"[.!?;]\s")
+
 # Drop roles whose posting is older than this many days (when a date is known).
 # Aggregators like The Muse keep evergreen listings open for a year+; those are
 # stale by any job-seeker's standard. Roles with no date are kept (can't judge).
@@ -243,16 +302,72 @@ def _strip_html(text: str) -> str:
     return re.sub(r"\s+", " ", t).strip(" .")
 
 
+def _clause_bounds(text: str, start: int, end: int) -> tuple[int, int]:
+    """[left, right) of the sentence/clause containing the match at [start, end).
+    Because _strip_html makes every requirement bullet its own ". "-delimited
+    clause, this isolates the one phrase the year number actually belongs to."""
+    left = 0
+    for m in _SENT_SEP.finditer(text, 0, start):
+        left = m.end()
+    nxt = _SENT_SEP.search(text, end)
+    return left, (nxt.start() if nxt else len(text))
+
+
+def _preceding_sentence(text: str, clause_left: int) -> str:
+    """The sentence immediately before clause_left — catches header-style
+    qualifiers like a standalone 'Strongly Preferred.' line above the bullet."""
+    if clause_left <= 0:
+        return ""
+    head = text[:clause_left]
+    seps = list(_SENT_SEP.finditer(head))
+    prev = seps[-2].end() if len(seps) >= 2 else 0
+    return head[prev:]
+
+
+def _nearest_marker_kind(s: str, pos: int) -> str | None:
+    """'soft' / 'hard' / None for the qualifier marker nearest offset `pos` in
+    `s`, so the closest framing word governs the number."""
+    s = s.lower()
+    best_kind, best_dist = None, None
+    for markers, kind in ((YEARS_SOFT_MARKERS, "soft"), (YEARS_HARD_MARKERS, "hard")):
+        for mk in markers:
+            i = s.find(mk)
+            while i != -1:
+                d = abs(i - pos)
+                if best_dist is None or d < best_dist:
+                    best_kind, best_dist = kind, d
+                i = s.find(mk, i + 1)
+    return best_kind
+
+
+def _requirement_kind(text: str, start: int, end: int) -> str:
+    """'soft' if the year bar at [start, end) is framed as preferred/nice-to-have,
+    else 'hard'. The number's OWN clause wins outright; only a clause with no
+    marker falls back to its preceding header sentence. This keeps a trailing
+    qualifier in one clause ('5+ years preferred. 2+ years required.') from
+    leaking onto the next number. Unmarked → 'hard'."""
+    left, right = _clause_bounds(text, start, end)
+    kind = _nearest_marker_kind(text[left:right], start - left)
+    if kind is None:
+        head = _preceding_sentence(text, left)
+        kind = _nearest_marker_kind(head, len(head))
+    return kind or "hard"
+
+
 def _parse_years(text: str) -> tuple[str, str]:
     """Return (years_raw, years_context).
 
     Honest-by-design: collects every requirement-style year mention, drops
-    team/collective-tenure phrasing, and reports the MINIMUM bar found (the most
-    optimistic read, so you never self-reject). The context column shows every
-    matched phrase so you can catch the number if it's lying. No match → unknown.
+    team/collective-tenure phrasing, and reports the MINIMUM HARD bar found (the
+    most optimistic read, so you never self-reject). A bar framed as preferred /
+    nice-to-have is set aside so it can't pull the gate below a real requirement
+    — but if a posting states ONLY soft bars, those still count (a sole
+    "preferred 8+ years" drops as before). The context column shows every matched
+    phrase so you can catch the number if it's lying. No match → unknown.
     """
-    candidates: list[int] = []
-    contexts:   list[str] = []
+    hard:     list[int] = []
+    soft:     list[int] = []
+    contexts: list[str] = []
     for pattern, mode in YEARS_PATTERNS:
         for m in pattern.finditer(text):
             span = m.group(0).lower()
@@ -261,17 +376,21 @@ def _parse_years(text: str) -> tuple[str, str]:
             nums = [int(g) for g in m.groups() if g]
             if not nums:
                 continue
-            value = nums[0] if mode == "low" else min(nums)
-            candidates.append(value)
+            value  = nums[0] if mode == "low" else min(nums)
+            bucket = soft if _requirement_kind(text, m.start(), m.end()) == "soft" else hard
+            bucket.append(value)
             s   = max(0, m.start() - 30)
             e   = min(len(text), m.end() + 30)
             ctx = "…" + text[s:e].replace("\n", " ").strip() + "…"
             if ctx not in contexts:
                 contexts.append(ctx)
 
-    if not candidates:
+    # Gate on hard requirements; soft bars only count when there are no hard
+    # ones, so the optimistic low-end never falls onto a "preferred" qualifier.
+    pool = hard or soft
+    if not pool:
         return ("unknown", "")
-    return (str(min(candidates)), " | ".join(contexts[:3]))
+    return (str(min(pool)), " | ".join(contexts[:3]))
 
 
 def _years_sentence(text: str) -> str:
@@ -772,6 +891,150 @@ def fetch_adzuna(pages_per_search: int = 2) -> list[dict]:
     return out
 
 
+# ── Bright Data / hiring.cafe (gated source, reached via the `bdata` CLI) ──────
+# hiring.cafe is JS-gated and unreachable by the urllib fetchers above; a Bright
+# Data Scraper Studio collector renders + extracts it. This fetcher is INERT by
+# default — it returns [] unless SOURCES["brightdata"] is True AND a complete
+# brightdata_key.txt exists. Rows are mapped into the standard _make_job() shape
+# and then flow through the EXACT same experience gate + dedupe as the ATS rows in
+# cmd_local; no filtering logic is duplicated here.
+#
+# Cost (pay-as-you-go, ~$1.50 / 1k page loads) is guarded three ways:
+#   1. inert-by-default toggle SOURCES["brightdata"] — the master spend switch;
+#   2. a once-per-day lock (BRIGHTDATA_MIN_HOURS) so a manual re-run cannot re-bill;
+#   3. a tight, pre-filtered search URL (fewer results = fewer page loads).
+# NOTE: bdata v0.3.1 `scraper run` exposes no --max-pages flag, so MAX_PAGE_LOADS
+# is enforced client-side as a hard cap on the rows we accept (a backstop, not a
+# server-side billing cap). The real spend protections are the toggle + daily lock
+# + a narrow search URL. Always confirm spend with `bdata budget balance`.
+
+# The AI-built collector decides the exact JSON field names, so each logical field
+# is looked up across the likely variants. The names to request are spelled out in
+# BRIGHTDATA_SETUP.md so the collector emits keys this map already covers.
+_BD_FIELDS = {
+    "title":    ["title", "job_title", "role", "position", "name"],
+    "company":  ["company", "company_name", "employer", "organization", "org"],
+    "location": ["location", "locations", "city", "job_location", "place"],
+    "url":      ["apply_url", "apply_link", "external_apply_url", "external_url",
+                 "direct_url", "job_url", "url", "link"],
+    "years":    ["years_required", "years_required_text", "experience_required",
+                 "experience", "years", "yoe"],
+    "content":  ["description", "job_description", "content", "summary", "details"],
+    "date":     ["post_date", "posted_date", "date_posted", "published_at",
+                 "created_at", "date", "posted"],
+}
+
+
+def _bd_get(row: dict, field: str) -> str:
+    """First non-empty value for a logical field across its candidate keys.
+    Lists are joined (e.g. multiple locations) so downstream string logic works."""
+    for key in _BD_FIELDS[field]:
+        v = row.get(key)
+        if isinstance(v, list):
+            v = ", ".join(str(x) for x in v if x)
+        if v:
+            return str(v).strip()
+    return ""
+
+
+def _bd_recent_run() -> bool:
+    """True if a paid brightdata run completed < BRIGHTDATA_MIN_HOURS ago. Backs the
+    once-per-day spend lock so a manual re-run cannot trigger repeated paid scrapes."""
+    try:
+        ts = float(open(_BRIGHTDATA_RUN_STAMP).read().strip())
+        return (datetime.datetime.now().timestamp() - ts) < BRIGHTDATA_MIN_HOURS * 3600
+    except Exception:
+        return False
+
+
+def fetch_brightdata() -> list[dict]:
+    # 1. Inert unless explicitly enabled AND fully configured. Both checks run
+    #    BEFORE any subprocess, so the disabled path costs nothing and never errors.
+    if not SOURCES.get("brightdata"):
+        return []
+    creds = _load_brightdata_creds()
+    if not creds:
+        print("  [brightdata] inert: brightdata_key.txt missing or incomplete", file=sys.stderr)
+        return []
+    api_key, collector_id, search_url = creds
+
+    # 2. Once-per-day spend lock — a manual re-run within the window is free.
+    if _bd_recent_run():
+        print(f"  [brightdata] skipped: a paid run completed < {BRIGHTDATA_MIN_HOURS}h ago "
+              f"(spend lock). Delete {os.path.basename(_BRIGHTDATA_RUN_STAMP)} to force a re-run.",
+              file=sys.stderr)
+        return []
+
+    # 3. CLI must be on PATH; if absent, stay inert rather than break the ATS run.
+    if shutil.which(BRIGHTDATA_CLI) is None:
+        print(f"  [brightdata] inert: '{BRIGHTDATA_CLI}' CLI not found on PATH "
+              "(npm install -g @brightdata/cli)", file=sys.stderr)
+        return []
+
+    # 4. Run the collector. API key passed via env (skips `bdata login`); never in
+    #    argv (would leak in `ps`). --json for parsing, --timeout bounds a hung job.
+    env = dict(os.environ, BRIGHTDATA_API_KEY=api_key)
+    cmd = [BRIGHTDATA_CLI, "scraper", "run", collector_id, search_url, "--json", "--timeout", "900"]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=1200)
+    except Exception as e:
+        print(f"  [brightdata] run failed: {e}", file=sys.stderr)
+        return []
+    if proc.returncode != 0:
+        print(f"  [brightdata] non-zero exit ({proc.returncode}): "
+              f"{(proc.stderr or '').strip()[:200]}", file=sys.stderr)
+        return []
+
+    # 5. The run was billed the moment it returned 0 — stamp the lock now, before
+    #    any parsing/filtering, so a re-run cannot re-bill even if mapping fails.
+    try:
+        open(_BRIGHTDATA_RUN_STAMP, "w").write(str(datetime.datetime.now().timestamp()))
+    except Exception:
+        pass
+
+    # 6. Parse rows: accept a bare array or a {data|results|...: [...]} wrapper.
+    try:
+        payload = json.loads(proc.stdout or "[]")
+    except Exception as e:
+        print(f"  [brightdata] could not parse JSON output: {e}", file=sys.stderr)
+        return []
+    if isinstance(payload, dict):
+        for k in ("data", "results", "rows", "items", "output"):
+            if isinstance(payload.get(k), list):
+                payload = payload[k]
+                break
+        else:
+            payload = [payload]
+    if not isinstance(payload, list):
+        return []
+
+    # 7. Map → standard _make_job() shape. Fold the years-required text AND the
+    #    description into `content` so the SAME _parse_years experience gate
+    #    downstream actually sees the requirement (otherwise hiring.cafe rows would
+    #    sail past the one rule that matters). MAX_PAGE_LOADS caps rows as a backstop.
+    out: list[dict] = []
+    for r in payload[:MAX_PAGE_LOADS]:
+        if not isinstance(r, dict):
+            continue
+        title = _bd_get(r, "title")
+        url   = _bd_get(r, "url")
+        if not _passes_title(title) or not url:
+            continue
+        company  = _bd_get(r, "company") or "(unknown)"
+        location = _bd_get(r, "location")
+        years_t  = _bd_get(r, "years")
+        desc     = _bd_get(r, "content")
+        content  = _strip_html(" . ".join(p for p in (years_t, desc) if p)) or title
+        date_str = _bd_get(r, "date") or None
+        out.append(_make_job(
+            "hiring.cafe", company, title, location,
+            url, content[:500], date_str, full_content=content,
+        ))
+
+    print(f"  fetch_brightdata: {len(payload)} row(s) → {len(out)} matched title filter")
+    return out
+
+
 # ── output ─────────────────────────────────────────────────────────────────────
 
 def _sort_key(j: dict) -> tuple:
@@ -831,10 +1094,14 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
     else:
         print("  (none — run python3 pmfarm_gmail_sync.py to enable)")
 
-    # ── ATS fetch ─────────────────────────────────────────────────────────────
-    tasks = ([(fetch_greenhouse, s) for s in GREENHOUSE] +
-             [(fetch_ashby,      s) for s in ASHBY] +
-             [(fetch_lever,      s) for s in LEVER])
+    # ── ATS fetch (each provider gated by its SOURCES toggle) ─────────────────
+    tasks: list[tuple] = []
+    if SOURCES.get("greenhouse"):
+        tasks += [(fetch_greenhouse, s) for s in GREENHOUSE]
+    if SOURCES.get("ashby"):
+        tasks += [(fetch_ashby, s) for s in ASHBY]
+    if SOURCES.get("lever"):
+        tasks += [(fetch_lever, s) for s in LEVER]
 
     raw: list[dict] = []
     with ThreadPoolExecutor(max_workers=12) as pool:
@@ -849,13 +1116,21 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
             except Exception as e:
                 print(f"  {fn_name}({slug}) error: {e}", file=sys.stderr)
 
+    # ── Bright Data / hiring.cafe (gated source) ──────────────────────────────
+    # Inert unless SOURCES["brightdata"] is True AND brightdata_key.txt is set up
+    # (see BRIGHTDATA_SETUP.md). Its rows join `raw` and pass through the SAME
+    # freshness + experience gate + location filter + dedupe below as the ATS rows.
+    if SOURCES.get("brightdata"):
+        raw.extend(fetch_brightdata())
+
     # ── ATS-DIRECT ONLY ──────────────────────────────────────────────────────
     # Aggregator sources (The Muse, Remotive, Adzuna) are intentionally NOT called.
     # Adzuna redirects through its own domain instead of the company apply page;
     # The Muse links to its own landing pages; Remotive returns ~0 matches. Every
-    # role here comes from Greenhouse/Ashby/Lever, whose URLs are the company's
-    # own application page — a clean direct link, every time. (fetch_themuse /
-    # fetch_remotive / fetch_adzuna remain defined but unused.)
+    # role here comes from Greenhouse/Ashby/Lever (and, once enabled, hiring.cafe
+    # direct apply links), whose URLs are the company's own application page — a
+    # clean direct link, every time. (fetch_themuse / fetch_remotive / fetch_adzuna
+    # remain defined but unused.)
 
     # ── freshness filter: drop stale postings with a known age > MAX_AGE_DAYS ──
     def _too_old(j: dict) -> bool:
