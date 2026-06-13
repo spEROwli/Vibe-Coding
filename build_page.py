@@ -191,9 +191,9 @@ def _card(row: dict, priority: bool) -> str:
         f'<span class="pill pl-{lc}">{html.escape(locpill)}</span>',
         f'<span class="pill pl-role pl-rt-{rt}">{rl}</span>',
     ]
-    if priority:                         tags.append('<span class="pill pl-pri">★ priority</span>')
-    if has_hw:                           tags.append('<span class="pill pl-hw">🔩 fit</span>')
-    if row.get("lang_signal") == "YES":  tags.append('<span class="pill pl-lang">🌐 lang</span>')
+    if priority:                         tags.append('<span class="pill pl-pri">priority</span>')
+    if has_hw:                           tags.append('<span class="pill pl-hw">fit</span>')
+    if row.get("lang_signal") == "YES":  tags.append('<span class="pill pl-lang">lang</span>')
     tagrow = "".join(tags)
 
     ystyle   = "ns" if years == "not stated" else "yr"
@@ -210,7 +210,7 @@ def _card(row: dict, priority: bool) -> str:
       <span class="ag {aclass}">{age_str}</span>
     </div>
     <div class="ti">{title}</div>
-    <div class="lo">📍 {loc}</div>
+    <div class="lo">{loc}</div>
     <div class="tags">{tagrow}</div>
     <div class="ye {ystyle}">{years}</div>
     <a class="btn" href="{url}" target="_blank" rel="noopener">Apply →</a>
@@ -220,7 +220,7 @@ def _card(row: dict, priority: bool) -> str:
 def _render_bucket(rows: list) -> str:
     """Render cards with section dividers between freshness×location groups.
     Dividers carry data-sec so JS can hide a heading when all its cards filter out."""
-    AGE_LABELS = ["🟢 This week", "🟡 1–3 weeks ago", "🔴 3+ weeks ago"]
+    AGE_LABELS = ["This week", "1–3 weeks ago", "3+ weeks ago"]
     LOC_LABELS = {
         "nyc": "NYC only", "remote+nyc": "NYC + Remote", "remote": "Remote",
         "sf": "SF only", "remote+sf": "SF + Remote",
@@ -238,7 +238,7 @@ def _render_bucket(rows: list) -> str:
             sec_id += 1
             al = AGE_LABELS[ab]
             ll = LOC_LABELS.get(lc, lc)
-            parts.append(f'  <div class="sec" data-sec="{sec_id}">{al} · {ll}</div>')
+            parts.append(f'  <div class="sec" data-sec="{sec_id}" data-tier="{ab}">{al} · {ll}</div>')
             last_key = key
         parts.append(_card(r, _is_priority(r)).replace('<div class="card', f'<div data-sec="{sec_id}" class="card', 1))
     return "\n".join(parts)
@@ -266,93 +266,113 @@ def build():
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Roles — {today}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  /* Couch Fisherman design system — warm sand, rust accent, light + dark */
   :root {{
-    --bg:#fafafa; --card:#fff; --ink:#18181b; --muted:#71717a; --line:#e4e4e7;
-    --accent:#2563eb; --accent-soft:#eff6ff;
+    --serif:'EB Garamond',Georgia,serif;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --bg:#EDE7DC; --card:#FAF7F1; --header-bg:rgba(237,231,220,.82);
+    --fg1:#1C1C1A; --fg2:#4A4A46; --fg3:#8A8882; --line:#D6CFC2; --rust:#B3502E;
+    --pill-bg:rgba(28,28,26,.045); --pill-fg:#6B6862; --pill-line:rgba(28,28,26,.07);
+    --pri-bg:rgba(179,80,46,.10); --pri-fg:#8C3E22;
+    --dot-fresh:#B3502E; --dot-recent:#B6A98F; --dot-stale:#CFC7B8;
+    --chip-fg:#4A4A46; --chip-border:#D6CFC2; --chip-active-bg:#1C1C1A; --chip-active-fg:#F5F1EA;
+    --shadow1:0 1px 2px rgba(28,28,26,.05); --shadow2:0 12px 30px -16px rgba(28,28,26,.28);
+  }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{
+      --bg:#1A1815; --card:#232019; --header-bg:rgba(26,24,21,.82);
+      --fg1:#F2EEE5; --fg2:#C2BCAE; --fg3:#8C887B; --line:#36322A; --rust:#CA6038;
+      --pill-bg:rgba(245,241,234,.06); --pill-fg:#B0AB9D; --pill-line:rgba(245,241,234,.06);
+      --pri-bg:rgba(202,96,56,.18); --pri-fg:#E59873;
+      --dot-fresh:#CA6038; --dot-recent:#8C887B; --dot-stale:#4A463C;
+      --chip-fg:#C2BCAE; --chip-border:#3C382F; --chip-active-bg:#F2EEE5; --chip-active-fg:#1A1815;
+      --shadow1:0 1px 2px rgba(0,0,0,.32); --shadow2:0 12px 30px -14px rgba(0,0,0,.6);
+    }}
   }}
   * {{ box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }}
-  body {{ font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
-         background:var(--bg); color:var(--ink); font-size:14px; line-height:1.4; }}
+  body {{ font-family:var(--sans); background:var(--bg); color:var(--fg1);
+         font-size:13px; line-height:1.4; -webkit-font-smoothing:antialiased; }}
 
-  /* ── Sticky header: title, counts, search, filter chips ── */
-  header {{ position:sticky; top:0; z-index:20; background:rgba(250,250,250,.92);
-           backdrop-filter:saturate(180%) blur(12px); border-bottom:1px solid var(--line);
-           padding:10px 14px 8px; }}
-  .htop {{ display:flex; align-items:baseline; justify-content:space-between; gap:8px; }}
-  h1 {{ font-size:17px; font-weight:700; letter-spacing:-.01em; }}
-  .count {{ font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }}
-  .search {{ width:100%; margin-top:8px; padding:9px 12px; font-size:15px;
-            border:1px solid var(--line); border-radius:10px; background:#fff; outline:none; }}
-  .search:focus {{ border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }}
-  .chips {{ display:flex; gap:6px; margin-top:8px; overflow-x:auto; padding-bottom:2px;
-           scrollbar-width:none; }}
+  /* ── Sticky header ── */
+  header {{ position:sticky; top:0; z-index:20; background:var(--header-bg);
+           backdrop-filter:saturate(150%) blur(12px); -webkit-backdrop-filter:saturate(150%) blur(12px);
+           border-bottom:.5px solid var(--line); padding:16px 18px 10px; }}
+  .htop {{ display:flex; align-items:baseline; justify-content:space-between; gap:10px; }}
+  h1 {{ font-family:var(--serif); font-size:26px; font-weight:500; letter-spacing:-.015em; color:var(--fg1); }}
+  h1::after {{ content:"."; color:var(--rust); }}
+  .count {{ font-family:var(--mono); font-size:11px; color:var(--fg3); font-variant-numeric:tabular-nums; }}
+  .search {{ width:100%; margin-top:12px; padding:7px 0; font-family:var(--sans); font-size:14px;
+            color:var(--fg1); background:transparent; border:none; border-bottom:.5px solid var(--line); outline:none; }}
+  .search::placeholder {{ color:var(--fg3); }}
+  .search:focus {{ border-bottom-color:var(--rust); }}
+  .chips {{ display:flex; gap:6px; margin-top:12px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }}
   .chips::-webkit-scrollbar {{ display:none; }}
-  .chip {{ flex:0 0 auto; font-size:12px; font-weight:600; padding:6px 11px; border-radius:999px;
-          border:1px solid var(--line); background:#fff; color:var(--muted); cursor:pointer;
-          white-space:nowrap; user-select:none; transition:.12s; }}
-  .chip[aria-pressed="true"] {{ background:var(--accent); color:#fff; border-color:var(--accent); }}
+  .chip {{ flex:0 0 auto; font-family:var(--sans); font-size:12px; font-weight:500; padding:6px 11px;
+          border-radius:4px; border:.5px solid var(--chip-border); background:transparent; color:var(--chip-fg);
+          cursor:pointer; white-space:nowrap; user-select:none; appearance:none; -webkit-appearance:none;
+          transition:background .15s,color .15s,border-color .15s; }}
+  .chip[aria-pressed="true"] {{ background:var(--chip-active-bg); color:var(--chip-active-fg); border-color:var(--chip-active-bg); }}
 
-  main {{ padding:6px 14px 60px; max-width:680px; margin:0 auto; }}
+  main {{ padding:6px 18px 60px; max-width:680px; margin:0 auto; }}
 
   /* ── Cards ── */
-  .card {{ background:var(--card); border:1px solid var(--line); border-radius:12px;
-          padding:13px 14px; margin-bottom:8px; display:flex; flex-direction:column; gap:5px;
-          border-left:3px solid var(--line); }}
-  .card.pri {{ border-left-color:var(--accent); }}
+  .card {{ background:var(--card); border:.5px solid var(--line); border-left:2px solid transparent;
+          border-radius:8px; padding:14px 16px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px;
+          box-shadow:var(--shadow1);
+          transition:transform .15s cubic-bezier(.2,0,0,1),box-shadow .15s,border-color .15s; }}
+  .card:hover {{ transform:translateY(-1px); box-shadow:var(--shadow2); border-color:var(--rust); }}
+  .card.pri {{ border-left-color:var(--rust); }}
   .card.done {{ opacity:.5; }}
-  .card.done .btn {{ background:#a1a1aa; }}
-  .top {{ display:flex; align-items:center; justify-content:space-between; gap:8px; }}
-  .co {{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
-        color:var(--muted); }}
-  .ti {{ font-size:16px; font-weight:650; line-height:1.25; letter-spacing:-.01em; }}
-  .lo {{ font-size:13px; color:var(--muted); }}
-  .ye {{ font-size:12.5px; line-height:1.45; padding:2px 0; }}
-  .ye.yr {{ color:#b45309; }}
-  .ye.ns {{ color:#a1a1aa; font-style:italic; }}
+  .card.done .btn {{ background:var(--fg3); }}
+  .top {{ display:flex; align-items:center; justify-content:space-between; gap:10px; }}
+  .co {{ font-family:var(--mono); font-size:11px; letter-spacing:.02em; color:var(--fg3); white-space:nowrap; }}
+  .ti {{ font-family:var(--sans); font-size:15px; font-weight:700; line-height:1.25; letter-spacing:-.012em; color:var(--fg1); }}
+  .lo {{ font-family:var(--sans); font-size:12px; color:var(--fg3); line-height:1.4; }}
+  .ye {{ font-family:var(--sans); font-size:12.5px; line-height:1.45; color:var(--fg2); padding-top:2px; }}
+  .ye.ns {{ font-family:var(--serif); font-style:italic; font-size:13px; color:var(--fg3); }}
 
-  /* ── Pill tags ── */
-  .tags {{ display:flex; flex-wrap:wrap; gap:5px; }}
-  .pill {{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px;
-          background:#f4f4f5; color:#52525b; }}
-  .pl-nyc {{ background:#eff6ff; color:#1d4ed8; }}
-  .pl-remote {{ background:#f0fdf4; color:#15803d; }}
-  .pl-remote\\+nyc {{ background:#eef2ff; color:#4338ca; }}
-  .pl-sf {{ background:#fff8f1; color:#b45309; }}
-  .pl-remote\\+sf {{ background:#fefce8; color:#92400e; }}
-  .pl-nyc\\+sf {{ background:#f0f9ff; color:#0369a1; }}
-  .pl-remote\\+nyc\\+sf {{ background:#f0f9ff; color:#0369a1; }}
-  .pl-international {{ background:#fdf4ff; color:#a21caf; }}
-  .pl-pri {{ background:#eff6ff; color:#1d4ed8; }}
-  .pl-hw {{ background:#fff7ed; color:#c2410c; }}
-  .pl-lang {{ background:#faf5ff; color:#7c3aed; }}
-  .pl-rt-pm  {{ background:#f0f9ff; color:#0369a1; }}
-  .pl-rt-tpm {{ background:#f0fdf4; color:#166534; }}
-  .pl-rt-se  {{ background:#fff7ed; color:#c2410c; }}
-  .pl-rt-sa  {{ background:#fdf4ff; color:#86198f; }}
-  .pl-rt-fde {{ background:#fefce8; color:#92400e; }}
-  .pl-rt-ops {{ background:#f8fafc; color:#475569; }}
+  /* ── Pills — uniform low-contrast; only priority carries the rust accent ── */
+  .tags {{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:2px; }}
+  .pill {{ font-family:var(--mono); font-size:10px; font-weight:500; letter-spacing:.03em; line-height:15px;
+          padding:2px 7px; border-radius:2px; background:var(--pill-bg); color:var(--pill-fg);
+          border:.5px solid var(--pill-line); white-space:nowrap; }}
+  .pl-pri {{ background:var(--pri-bg); color:var(--pri-fg); border-color:transparent; }}
 
-  .ag {{ font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; flex:0 0 auto; }}
-  .ag-fresh  {{ background:#dcfce7; color:#15803d; }}
-  .ag-recent {{ background:#fef9c3; color:#a16207; }}
-  .ag-stale  {{ background:#fee2e2; color:#b91c1c; }}
+  /* ── Age dot + label (mono) ── */
+  .ag {{ font-family:var(--mono); font-size:11px; color:var(--fg3); font-variant-numeric:tabular-nums;
+        display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; }}
+  .ag::before {{ content:""; width:5px; height:5px; border-radius:50%; background:var(--dot-stale); flex:0 0 auto; }}
+  .ag-fresh::before  {{ background:var(--dot-fresh); }}
+  .ag-recent::before {{ background:var(--dot-recent); }}
 
-  .sec {{ font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
-         color:#a1a1aa; padding:16px 2px 5px; }}
+  /* ── Section divider with tier dot + hairline rule ── */
+  .sec {{ display:flex; align-items:center; gap:9px; font-family:var(--sans); font-size:10px; font-weight:700;
+         letter-spacing:.11em; text-transform:uppercase; color:var(--fg3); padding:22px 0 9px; }}
+  .sec::before {{ content:""; width:6px; height:6px; border-radius:1px; background:var(--dot-stale); flex:0 0 auto; }}
+  .sec[data-tier="0"]::before {{ background:var(--dot-fresh); }}
+  .sec[data-tier="1"]::before {{ background:var(--dot-recent); }}
+  .sec::after {{ content:""; flex:1; height:0; border-top:.5px solid var(--line); }}
 
-  .btn {{ display:block; text-align:center; background:var(--accent); color:#fff; font-size:14px;
-         font-weight:650; padding:9px; border-radius:9px; text-decoration:none; margin-top:3px; }}
-  .btn:active {{ opacity:.85; }}
+  .btn {{ display:block; text-align:center; background:var(--chip-active-bg); color:var(--chip-active-fg);
+         font-family:var(--sans); font-size:13px; font-weight:600; padding:9px; border-radius:6px;
+         text-decoration:none; margin-top:4px; transition:opacity .15s; }}
+  .btn:hover {{ opacity:.88; }}
 
-  .lbl {{ font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
-         color:#a1a1aa; padding:14px 2px 8px; }}
-  .empty {{ text-align:center; color:var(--muted); padding:40px 0; font-size:14px; display:none; }}
+  .lbl {{ font-family:var(--mono); font-size:10px; letter-spacing:.07em; text-transform:uppercase;
+         color:var(--fg3); padding:14px 0 2px; }}
+  .empty {{ text-align:center; font-family:var(--serif); font-style:italic; font-size:16px;
+           color:var(--fg3); padding:64px 0; display:none; }}
   details {{ margin-top:14px; }}
-  summary {{ font-size:13px; font-weight:650; color:#52525b; padding:11px 13px; background:#fff;
-            border:1px solid var(--line); border-radius:10px; cursor:pointer; list-style:none; }}
+  summary {{ font-family:var(--sans); font-size:13px; font-weight:600; color:var(--fg2); padding:11px 13px;
+            background:var(--card); border:.5px solid var(--line); border-radius:8px; cursor:pointer; list-style:none; }}
   summary::-webkit-details-marker {{ display:none; }}
-  .manifest {{ font-size:11px; color:var(--muted); padding:12px 2px 0; line-height:1.55; }}
+  .manifest {{ font-family:var(--mono); font-size:10.5px; line-height:1.7; color:var(--fg3);
+              padding:28px 0 0; border-top:.5px solid var(--line); margin-top:28px; }}
 </style></head><body>
 
 <header>
@@ -371,9 +391,9 @@ def build():
     <button class="chip" data-f="nyc"      aria-pressed="false">NYC</button>
     <button class="chip" data-f="sf"       aria-pressed="false">SF</button>
     <button class="chip" data-f="remote"   aria-pressed="false">Remote</button>
-    <button class="chip" data-f="fresh"    aria-pressed="false">🟢 This week</button>
-    <button class="chip" data-f="priority" aria-pressed="false">★ Priority</button>
-    <button class="chip" data-f="fit"      aria-pressed="false">🔩 Fit</button>
+    <button class="chip" data-f="fresh"    aria-pressed="false">This week</button>
+    <button class="chip" data-f="priority" aria-pressed="false">Priority</button>
+    <button class="chip" data-f="fit"      aria-pressed="false">Fit</button>
     <button class="chip" data-f="hideapplied" aria-pressed="false">Hide applied</button>
   </div>
 </header>
@@ -386,14 +406,14 @@ def build():
   <div class="empty" id="empty">No roles match these filters.</div>
 
   <details>
-    <summary>▸ Stretch bucket — 4+ yrs stated ({len(bucket_b)} roles)</summary>
+    <summary>Stretch bucket — 4+ yrs stated ({len(bucket_b)} roles)</summary>
     <div id="blist">
 {b_cards}
     </div>
   </details>
 
   <div class="manifest">
-    {len(rows)} roles from live ATS JSON · {len(bucket_a)} in-range ({pri_count} ★) · {len(bucket_b)} stretch.
+    {len(rows)} roles from live ATS JSON · {len(bucket_a)} in-range ({pri_count} priority) · {len(bucket_b)} stretch.
     Every role traces to a live API call; titles, locations, and the years sentence are copied
     verbatim from the JD — none inferred. Synced {today}.
   </div>

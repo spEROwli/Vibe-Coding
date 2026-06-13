@@ -3,93 +3,113 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
 <title>Roles — 2026-06-13</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+  /* Couch Fisherman design system — warm sand, rust accent, light + dark */
   :root {
-    --bg:#fafafa; --card:#fff; --ink:#18181b; --muted:#71717a; --line:#e4e4e7;
-    --accent:#2563eb; --accent-soft:#eff6ff;
+    --serif:'EB Garamond',Georgia,serif;
+    --sans:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
+    --bg:#EDE7DC; --card:#FAF7F1; --header-bg:rgba(237,231,220,.82);
+    --fg1:#1C1C1A; --fg2:#4A4A46; --fg3:#8A8882; --line:#D6CFC2; --rust:#B3502E;
+    --pill-bg:rgba(28,28,26,.045); --pill-fg:#6B6862; --pill-line:rgba(28,28,26,.07);
+    --pri-bg:rgba(179,80,46,.10); --pri-fg:#8C3E22;
+    --dot-fresh:#B3502E; --dot-recent:#B6A98F; --dot-stale:#CFC7B8;
+    --chip-fg:#4A4A46; --chip-border:#D6CFC2; --chip-active-bg:#1C1C1A; --chip-active-fg:#F5F1EA;
+    --shadow1:0 1px 2px rgba(28,28,26,.05); --shadow2:0 12px 30px -16px rgba(28,28,26,.28);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#1A1815; --card:#232019; --header-bg:rgba(26,24,21,.82);
+      --fg1:#F2EEE5; --fg2:#C2BCAE; --fg3:#8C887B; --line:#36322A; --rust:#CA6038;
+      --pill-bg:rgba(245,241,234,.06); --pill-fg:#B0AB9D; --pill-line:rgba(245,241,234,.06);
+      --pri-bg:rgba(202,96,56,.18); --pri-fg:#E59873;
+      --dot-fresh:#CA6038; --dot-recent:#8C887B; --dot-stale:#4A463C;
+      --chip-fg:#C2BCAE; --chip-border:#3C382F; --chip-active-bg:#F2EEE5; --chip-active-fg:#1A1815;
+      --shadow1:0 1px 2px rgba(0,0,0,.32); --shadow2:0 12px 30px -14px rgba(0,0,0,.6);
+    }
   }
   * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
-  body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif;
-         background:var(--bg); color:var(--ink); font-size:14px; line-height:1.4; }
+  body { font-family:var(--sans); background:var(--bg); color:var(--fg1);
+         font-size:13px; line-height:1.4; -webkit-font-smoothing:antialiased; }
 
-  /* ── Sticky header: title, counts, search, filter chips ── */
-  header { position:sticky; top:0; z-index:20; background:rgba(250,250,250,.92);
-           backdrop-filter:saturate(180%) blur(12px); border-bottom:1px solid var(--line);
-           padding:10px 14px 8px; }
-  .htop { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
-  h1 { font-size:17px; font-weight:700; letter-spacing:-.01em; }
-  .count { font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums; }
-  .search { width:100%; margin-top:8px; padding:9px 12px; font-size:15px;
-            border:1px solid var(--line); border-radius:10px; background:#fff; outline:none; }
-  .search:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
-  .chips { display:flex; gap:6px; margin-top:8px; overflow-x:auto; padding-bottom:2px;
-           scrollbar-width:none; }
+  /* ── Sticky header ── */
+  header { position:sticky; top:0; z-index:20; background:var(--header-bg);
+           backdrop-filter:saturate(150%) blur(12px); -webkit-backdrop-filter:saturate(150%) blur(12px);
+           border-bottom:.5px solid var(--line); padding:16px 18px 10px; }
+  .htop { display:flex; align-items:baseline; justify-content:space-between; gap:10px; }
+  h1 { font-family:var(--serif); font-size:26px; font-weight:500; letter-spacing:-.015em; color:var(--fg1); }
+  h1::after { content:"."; color:var(--rust); }
+  .count { font-family:var(--mono); font-size:11px; color:var(--fg3); font-variant-numeric:tabular-nums; }
+  .search { width:100%; margin-top:12px; padding:7px 0; font-family:var(--sans); font-size:14px;
+            color:var(--fg1); background:transparent; border:none; border-bottom:.5px solid var(--line); outline:none; }
+  .search::placeholder { color:var(--fg3); }
+  .search:focus { border-bottom-color:var(--rust); }
+  .chips { display:flex; gap:6px; margin-top:12px; overflow-x:auto; padding-bottom:4px; scrollbar-width:none; }
   .chips::-webkit-scrollbar { display:none; }
-  .chip { flex:0 0 auto; font-size:12px; font-weight:600; padding:6px 11px; border-radius:999px;
-          border:1px solid var(--line); background:#fff; color:var(--muted); cursor:pointer;
-          white-space:nowrap; user-select:none; transition:.12s; }
-  .chip[aria-pressed="true"] { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .chip { flex:0 0 auto; font-family:var(--sans); font-size:12px; font-weight:500; padding:6px 11px;
+          border-radius:4px; border:.5px solid var(--chip-border); background:transparent; color:var(--chip-fg);
+          cursor:pointer; white-space:nowrap; user-select:none; appearance:none; -webkit-appearance:none;
+          transition:background .15s,color .15s,border-color .15s; }
+  .chip[aria-pressed="true"] { background:var(--chip-active-bg); color:var(--chip-active-fg); border-color:var(--chip-active-bg); }
 
-  main { padding:6px 14px 60px; max-width:680px; margin:0 auto; }
+  main { padding:6px 18px 60px; max-width:680px; margin:0 auto; }
 
   /* ── Cards ── */
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
-          padding:13px 14px; margin-bottom:8px; display:flex; flex-direction:column; gap:5px;
-          border-left:3px solid var(--line); }
-  .card.pri { border-left-color:var(--accent); }
+  .card { background:var(--card); border:.5px solid var(--line); border-left:2px solid transparent;
+          border-radius:8px; padding:14px 16px; margin-bottom:8px; display:flex; flex-direction:column; gap:6px;
+          box-shadow:var(--shadow1);
+          transition:transform .15s cubic-bezier(.2,0,0,1),box-shadow .15s,border-color .15s; }
+  .card:hover { transform:translateY(-1px); box-shadow:var(--shadow2); border-color:var(--rust); }
+  .card.pri { border-left-color:var(--rust); }
   .card.done { opacity:.5; }
-  .card.done .btn { background:#a1a1aa; }
-  .top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
-  .co { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
-        color:var(--muted); }
-  .ti { font-size:16px; font-weight:650; line-height:1.25; letter-spacing:-.01em; }
-  .lo { font-size:13px; color:var(--muted); }
-  .ye { font-size:12.5px; line-height:1.45; padding:2px 0; }
-  .ye.yr { color:#b45309; }
-  .ye.ns { color:#a1a1aa; font-style:italic; }
+  .card.done .btn { background:var(--fg3); }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .co { font-family:var(--mono); font-size:11px; letter-spacing:.02em; color:var(--fg3); white-space:nowrap; }
+  .ti { font-family:var(--sans); font-size:15px; font-weight:700; line-height:1.25; letter-spacing:-.012em; color:var(--fg1); }
+  .lo { font-family:var(--sans); font-size:12px; color:var(--fg3); line-height:1.4; }
+  .ye { font-family:var(--sans); font-size:12.5px; line-height:1.45; color:var(--fg2); padding-top:2px; }
+  .ye.ns { font-family:var(--serif); font-style:italic; font-size:13px; color:var(--fg3); }
 
-  /* ── Pill tags ── */
-  .tags { display:flex; flex-wrap:wrap; gap:5px; }
-  .pill { font-size:11px; font-weight:600; padding:2px 8px; border-radius:999px;
-          background:#f4f4f5; color:#52525b; }
-  .pl-nyc { background:#eff6ff; color:#1d4ed8; }
-  .pl-remote { background:#f0fdf4; color:#15803d; }
-  .pl-remote\+nyc { background:#eef2ff; color:#4338ca; }
-  .pl-sf { background:#fff8f1; color:#b45309; }
-  .pl-remote\+sf { background:#fefce8; color:#92400e; }
-  .pl-nyc\+sf { background:#f0f9ff; color:#0369a1; }
-  .pl-remote\+nyc\+sf { background:#f0f9ff; color:#0369a1; }
-  .pl-international { background:#fdf4ff; color:#a21caf; }
-  .pl-pri { background:#eff6ff; color:#1d4ed8; }
-  .pl-hw { background:#fff7ed; color:#c2410c; }
-  .pl-lang { background:#faf5ff; color:#7c3aed; }
-  .pl-rt-pm  { background:#f0f9ff; color:#0369a1; }
-  .pl-rt-tpm { background:#f0fdf4; color:#166534; }
-  .pl-rt-se  { background:#fff7ed; color:#c2410c; }
-  .pl-rt-sa  { background:#fdf4ff; color:#86198f; }
-  .pl-rt-fde { background:#fefce8; color:#92400e; }
-  .pl-rt-ops { background:#f8fafc; color:#475569; }
+  /* ── Pills — uniform low-contrast; only priority carries the rust accent ── */
+  .tags { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:2px; }
+  .pill { font-family:var(--mono); font-size:10px; font-weight:500; letter-spacing:.03em; line-height:15px;
+          padding:2px 7px; border-radius:2px; background:var(--pill-bg); color:var(--pill-fg);
+          border:.5px solid var(--pill-line); white-space:nowrap; }
+  .pl-pri { background:var(--pri-bg); color:var(--pri-fg); border-color:transparent; }
 
-  .ag { font-size:10px; font-weight:700; padding:2px 7px; border-radius:999px; flex:0 0 auto; }
-  .ag-fresh  { background:#dcfce7; color:#15803d; }
-  .ag-recent { background:#fef9c3; color:#a16207; }
-  .ag-stale  { background:#fee2e2; color:#b91c1c; }
+  /* ── Age dot + label (mono) ── */
+  .ag { font-family:var(--mono); font-size:11px; color:var(--fg3); font-variant-numeric:tabular-nums;
+        display:inline-flex; align-items:center; gap:6px; flex:0 0 auto; }
+  .ag::before { content:""; width:5px; height:5px; border-radius:50%; background:var(--dot-stale); flex:0 0 auto; }
+  .ag-fresh::before  { background:var(--dot-fresh); }
+  .ag-recent::before { background:var(--dot-recent); }
 
-  .sec { font-size:10px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
-         color:#a1a1aa; padding:16px 2px 5px; }
+  /* ── Section divider with tier dot + hairline rule ── */
+  .sec { display:flex; align-items:center; gap:9px; font-family:var(--sans); font-size:10px; font-weight:700;
+         letter-spacing:.11em; text-transform:uppercase; color:var(--fg3); padding:22px 0 9px; }
+  .sec::before { content:""; width:6px; height:6px; border-radius:1px; background:var(--dot-stale); flex:0 0 auto; }
+  .sec[data-tier="0"]::before { background:var(--dot-fresh); }
+  .sec[data-tier="1"]::before { background:var(--dot-recent); }
+  .sec::after { content:""; flex:1; height:0; border-top:.5px solid var(--line); }
 
-  .btn { display:block; text-align:center; background:var(--accent); color:#fff; font-size:14px;
-         font-weight:650; padding:9px; border-radius:9px; text-decoration:none; margin-top:3px; }
-  .btn:active { opacity:.85; }
+  .btn { display:block; text-align:center; background:var(--chip-active-bg); color:var(--chip-active-fg);
+         font-family:var(--sans); font-size:13px; font-weight:600; padding:9px; border-radius:6px;
+         text-decoration:none; margin-top:4px; transition:opacity .15s; }
+  .btn:hover { opacity:.88; }
 
-  .lbl { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase;
-         color:#a1a1aa; padding:14px 2px 8px; }
-  .empty { text-align:center; color:var(--muted); padding:40px 0; font-size:14px; display:none; }
+  .lbl { font-family:var(--mono); font-size:10px; letter-spacing:.07em; text-transform:uppercase;
+         color:var(--fg3); padding:14px 0 2px; }
+  .empty { text-align:center; font-family:var(--serif); font-style:italic; font-size:16px;
+           color:var(--fg3); padding:64px 0; display:none; }
   details { margin-top:14px; }
-  summary { font-size:13px; font-weight:650; color:#52525b; padding:11px 13px; background:#fff;
-            border:1px solid var(--line); border-radius:10px; cursor:pointer; list-style:none; }
+  summary { font-family:var(--sans); font-size:13px; font-weight:600; color:var(--fg2); padding:11px 13px;
+            background:var(--card); border:.5px solid var(--line); border-radius:8px; cursor:pointer; list-style:none; }
   summary::-webkit-details-marker { display:none; }
-  .manifest { font-size:11px; color:var(--muted); padding:12px 2px 0; line-height:1.55; }
+  .manifest { font-family:var(--mono); font-size:10.5px; line-height:1.7; color:var(--fg3);
+              padding:28px 0 0; border-top:.5px solid var(--line); margin-top:28px; }
 </style></head><body>
 
 <header>
@@ -108,9 +128,9 @@
     <button class="chip" data-f="nyc"      aria-pressed="false">NYC</button>
     <button class="chip" data-f="sf"       aria-pressed="false">SF</button>
     <button class="chip" data-f="remote"   aria-pressed="false">Remote</button>
-    <button class="chip" data-f="fresh"    aria-pressed="false">🟢 This week</button>
-    <button class="chip" data-f="priority" aria-pressed="false">★ Priority</button>
-    <button class="chip" data-f="fit"      aria-pressed="false">🔩 Fit</button>
+    <button class="chip" data-f="fresh"    aria-pressed="false">This week</button>
+    <button class="chip" data-f="priority" aria-pressed="false">Priority</button>
+    <button class="chip" data-f="fit"      aria-pressed="false">Fit</button>
     <button class="chip" data-f="hideapplied" aria-pressed="false">Hide applied</button>
   </div>
 </header>
@@ -118,27 +138,27 @@
 <main>
   <div class="lbl">In range · ≤3 yrs or not stated · fresh → fit</div>
   <div id="alist">
-  <div class="sec" data-sec="1">🟢 This week · NYC only</div>
+  <div class="sec" data-sec="1" data-tier="0">This week · NYC only</div>
   <div data-sec="1" class="card pri" data-loc="nyc" data-age="0" data-pri="1" data-applied="0" data-hw="1" data-role="se" data-search="amplitude senior solutions engineer arlington, va; atlanta, ga; austin, tx; boston, ma; charlotte, nc; chicago, il; dallas, tx; houston, tx; indianapolis, indiana; kansas city, missouri; minneapolis, minnesota; new york, ny; philadelphia, pa; st louis, missouri">
     <div class="top">
       <div class="co">Amplitude</div>
       <span class="ag ag-fresh">2d ago</span>
     </div>
     <div class="ti">Senior Solutions Engineer</div>
-    <div class="lo">📍 Arlington, VA; Atlanta, GA; Austin, TX; Boston, MA; Charlotte, NC; Chicago, IL; Dallas, TX; Houston, TX; Indianapolis, Indiana; Kansas City, Missouri; Minneapolis, Minnesota; New York, NY; Philadelphia, PA; St Louis, Missouri</div>
-    <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-se">SE</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">Arlington, VA; Atlanta, GA; Austin, TX; Boston, MA; Charlotte, NC; Chicago, IL; Dallas, TX; Houston, TX; Indianapolis, Indiana; Kansas City, Missouri; Minneapolis, Minnesota; New York, NY; Philadelphia, PA; St Louis, Missouri</div>
+    <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-se">SE</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">5+ years in software pre-sales (SE, Sales Consulting, or technical Account Management roles).</div>
     <a class="btn" href="https://job-boards.greenhouse.io/amplitude/jobs/8582548002" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="2">🟢 This week · SF + Remote</div>
+  <div class="sec" data-sec="2" data-tier="0">This week · SF + Remote</div>
   <div data-sec="2" class="card pri" data-loc="remote+sf" data-age="0" data-pri="1" data-applied="0" data-hw="1" data-role="se" data-search="verkada associate solutions engineering program manager san mateo, ca united states">
     <div class="top">
       <div class="co">Verkada</div>
       <span class="ag ag-fresh">today</span>
     </div>
     <div class="ti">Associate Solutions Engineering Program Manager</div>
-    <div class="lo">📍 San Mateo, CA United States</div>
-    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-se">SE</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">San Mateo, CA United States</div>
+    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-se">SE</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">2+ years of experience in solutions engineering, program management, or technical enablement .</div>
     <a class="btn" href="https://job-boards.greenhouse.io/verkada/jobs/4595354007" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -148,8 +168,8 @@
       <span class="ag ag-fresh">today</span>
     </div>
     <div class="ti">Sales Strategy and Operations Associate</div>
-    <div class="lo">📍 San Mateo, CA United States</div>
-    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-ops">Ops</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">San Mateo, CA United States</div>
+    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-ops">Ops</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">3+ years of professional experience, ideally in consulting, banking, private equity, corporate strategy, or a startup.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/verkada/jobs/4086576007" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -159,8 +179,8 @@
       <span class="ag ag-fresh">today</span>
     </div>
     <div class="ti">Sales Strategy &amp; Operations Renewals Associate (Sr)</div>
-    <div class="lo">📍 San Mateo, CA United States</div>
-    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-ops">Ops</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">San Mateo, CA United States</div>
+    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-ops">Ops</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">3+ years of professional experience, ideally in consulting, corporate strategy, or a high-growth startup.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/verkada/jobs/5158264007" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -170,8 +190,8 @@
       <span class="ag ag-fresh">today</span>
     </div>
     <div class="ti">Solutions Engineer</div>
-    <div class="lo">📍 San Mateo, CA United States</div>
-    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-se">SE</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">San Mateo, CA United States</div>
+    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-se">SE</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://job-boards.greenhouse.io/verkada/jobs/4086501007" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -181,20 +201,20 @@
       <span class="ag ag-fresh">today</span>
     </div>
     <div class="ti">(Sr) Associate, Strategic Finance &amp; Business Operations</div>
-    <div class="lo">📍 San Mateo, CA United States</div>
-    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-ops">Ops</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">San Mateo, CA United States</div>
+    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-ops">Ops</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">3-5+ years of top tier professional experience.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/verkada/jobs/4855765007" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="3">🟢 This week · Remote</div>
+  <div class="sec" data-sec="3" data-tier="0">This week · Remote</div>
   <div data-sec="3" class="card pri" data-loc="remote" data-age="0" data-pri="1" data-applied="0" data-hw="1" data-role="se" data-search="verkada solutions engineering manager, select &amp; territory tempe, az united states">
     <div class="top">
       <div class="co">Verkada</div>
       <span class="ag ag-fresh">today</span>
     </div>
     <div class="ti">Solutions Engineering Manager, Select &amp; Territory</div>
-    <div class="lo">📍 Tempe, AZ United States</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-se">SE</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">Tempe, AZ United States</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-se">SE</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">Demonstrated leadership success as a technical presales Manager for the last 3+ years within a similar company preferred.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/verkada/jobs/4185105007" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -204,8 +224,8 @@
       <span class="ag ag-fresh">today</span>
     </div>
     <div class="ti">Group Product Manager, Financial Engineering </div>
-    <div class="lo">📍 Remote - USA</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span></div>
+    <div class="lo">Remote - USA</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span></div>
     <div class="ye yr">10+ years of product management experience, including 2+ years managing other product managers, with a track record of delivering finance or enterprise infrastructure products at scale.</div>
     <a class="btn" href="https://www.coinbase.com/careers/positions/7789404?gh_jid=7789404" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -215,8 +235,8 @@
       <span class="ag ag-fresh">1d ago</span>
     </div>
     <div class="ti">Forward Deployed AI Solutions Engineer</div>
-    <div class="lo">📍 US Remote</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-fde">FDE</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">US Remote</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-fde">FDE</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">Success in year one .</div>
     <a class="btn" href="https://job-boards.greenhouse.io/natera/jobs/5766365004" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -226,8 +246,8 @@
       <span class="ag ag-fresh">1d ago</span>
     </div>
     <div class="ti">Sr Product Manager, Oncology Japan</div>
-    <div class="lo">📍 US Remote</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">US Remote</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">Location: United States (Willingness to travel to Japan 1-2x a year - Japanese fluency in language and culture is a requirement).</div>
     <a class="btn" href="https://job-boards.greenhouse.io/natera/jobs/5983667004" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -237,8 +257,8 @@
       <span class="ag ag-fresh">2d ago</span>
     </div>
     <div class="ti">Deployment Strategist</div>
-    <div class="lo">📍 United States; USCA</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">United States; USCA</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">Ideal Experience: 2+ years as a Deployment Strategist OR 2+ years at a high-growth startup in a &quot;builder&quot; or &quot;founder&quot; capacity.</div>
     <a class="btn" href="https://databricks.com/company/careers/open-positions/job?gh_jid=8463063002" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -248,8 +268,8 @@
       <span class="ag ag-fresh">2d ago</span>
     </div>
     <div class="ti">Lead Product Manager, Enterprise AI &amp; Automation</div>
-    <div class="lo">📍 Remote, USA</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">Remote, USA</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">7+ years in IT product management, with at least 2 years focused on AI or emerging technology products.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/marqeta/jobs/7960211" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -259,8 +279,8 @@
       <span class="ag ag-fresh">2d ago</span>
     </div>
     <div class="ti">Senior Solutions Architect, Financial Services - NYC</div>
-    <div class="lo">📍 Remote, US</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-sa">SA</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">Remote, US</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-sa">SA</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">In your first year, you&#x27;ll focus on driving successful GitLab platform adoption in commercial financial services accounts across time zones in North America, influencing revenue growth through solution selling, and building long-term, trust-based relationships that highlight GitLab&#x27;s differentiated</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gitlab/jobs/8529741002" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -270,8 +290,8 @@
       <span class="ag ag-fresh">3d ago</span>
     </div>
     <div class="ti">Product Owner, Accounting Stack (entire Business Suite)</div>
-    <div class="lo">📍 Remote / USA</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span></div>
+    <div class="lo">Remote / USA</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://jobs.lever.co/Flex/0af96a53-0763-4d5f-9001-4ce7b2835dc4" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -281,8 +301,8 @@
       <span class="ag ag-fresh">3d ago</span>
     </div>
     <div class="ti">Product Owner, Payments and Infrastructure</div>
-    <div class="lo">📍 Remote / USA</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span></div>
+    <div class="lo">Remote / USA</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://jobs.lever.co/Flex/94986b54-a3f9-4265-94d1-3c289c96b586" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -292,8 +312,8 @@
       <span class="ag ag-fresh">7d ago</span>
     </div>
     <div class="ti">Field Strategist, Forward Deployed Engineer </div>
-    <div class="lo">📍 Remote</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-fde">FDE</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">Remote</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-fde">FDE</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gitlab/jobs/8497078002" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -303,8 +323,8 @@
       <span class="ag ag-fresh">7d ago</span>
     </div>
     <div class="ti">Forward Deployed Engineer - UK</div>
-    <div class="lo">📍 Remote</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-fde">FDE</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">Remote</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-fde">FDE</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gitlab/jobs/8522408002" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -314,19 +334,19 @@
       <span class="ag ag-fresh">7d ago</span>
     </div>
     <div class="ti">Forward Deployed Engnieer - META</div>
-    <div class="lo">📍 Remote</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-fde">FDE</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">Remote</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-fde">FDE</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gitlab/jobs/8524783002" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="4">🟢 This week · NYC + SF</div>
+  <div class="sec" data-sec="4" data-tier="0">This week · NYC + SF</div>
   <div data-sec="4" class="card" data-loc="nyc+sf" data-age="0" data-pri="0" data-applied="0" data-hw="0" data-role="pm" data-search="okta product manager - agentic ai bellevue, washington; chicago, illinois; new york, new york; san francisco, california">
     <div class="top">
       <div class="co">Okta</div>
       <span class="ag ag-fresh">1d ago</span>
     </div>
     <div class="ti">Product Manager - Agentic AI</div>
-    <div class="lo">📍 Bellevue, Washington; Chicago, Illinois; New York, New York; San Francisco, California</div>
+    <div class="lo">Bellevue, Washington; Chicago, Illinois; New York, New York; San Francisco, California</div>
     <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">3+ years of product management experience, ideally in SaaS, developer tools, AI, or platform products.</div>
     <a class="btn" href="https://www.okta.com/company/careers/opportunity/7982658?gh_jid=7982658" target="_blank" rel="noopener">Apply →</a>
@@ -337,43 +357,43 @@
       <span class="ag ag-fresh">1d ago</span>
     </div>
     <div class="ti">Product Manager - Identity Threat Protection</div>
-    <div class="lo">📍 Bellevue, Washington; Chicago, Illinois; New York, New York; San Francisco, California; Toronto, Ontario, Canada; Washington, DC</div>
+    <div class="lo">Bellevue, Washington; Chicago, Illinois; New York, New York; San Francisco, California; Toronto, Ontario, Canada; Washington, DC</div>
     <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">3+ years of product management experience, ideally in enterprise SaaS, cybersecurity, or identity-related products.</div>
     <a class="btn" href="https://www.okta.com/company/careers/opportunity/7603685?gh_jid=7603685" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="5">🟢 This week · NYC only</div>
+  <div class="sec" data-sec="5" data-tier="0">This week · NYC only</div>
   <div data-sec="5" class="card" data-loc="nyc" data-age="0" data-pri="0" data-applied="0" data-hw="0" data-role="se" data-search="okta senior solutions engineer (north east) connecticut; massachusetts; new york, new york">
     <div class="top">
       <div class="co">Okta</div>
       <span class="ag ag-fresh">1d ago</span>
     </div>
     <div class="ti">Senior Solutions Engineer (North East)</div>
-    <div class="lo">📍 Connecticut; Massachusetts; New York, New York</div>
+    <div class="lo">Connecticut; Massachusetts; New York, New York</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-se">SE</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://www.okta.com/company/careers/opportunity/7607557?gh_jid=7607557" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="6">🟢 This week · NYC + SF</div>
+  <div class="sec" data-sec="6" data-tier="0">This week · NYC + SF</div>
   <div data-sec="6" class="card" data-loc="nyc+sf" data-age="0" data-pri="0" data-applied="0" data-hw="0" data-role="sa" data-search="okta solutions architect, ai identity  bellevue, washington; chicago, illinois; new york, new york; san francisco, california; washington, dc">
     <div class="top">
       <div class="co">Okta</div>
       <span class="ag ag-fresh">1d ago</span>
     </div>
     <div class="ti">Solutions Architect, AI Identity </div>
-    <div class="lo">📍 Bellevue, Washington; Chicago, Illinois; New York, New York; San Francisco, California; Washington, DC</div>
+    <div class="lo">Bellevue, Washington; Chicago, Illinois; New York, New York; San Francisco, California; Washington, DC</div>
     <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye yr">Architecture, Consulting, &amp; Identity Expertise: 8+ years of overall IT, software development, solution design, and technical architecture experience; combined 3+ years of consulting experience and IAM/Security Architecture with proven strategic success across workforce, customer, and Non-Human Ident</div>
     <a class="btn" href="https://www.okta.com/company/careers/opportunity/7749222?gh_jid=7749222" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="7">🟢 This week · SF only</div>
+  <div class="sec" data-sec="7" data-tier="0">This week · SF only</div>
   <div data-sec="7" class="card" data-loc="sf" data-age="0" data-pri="0" data-applied="0" data-hw="0" data-role="pm" data-search="lyft group product manager, core rider san francisco, ca">
     <div class="top">
       <div class="co">Lyft</div>
       <span class="ag ag-fresh">3d ago</span>
     </div>
     <div class="ti">Group Product Manager, Core Rider</div>
-    <div class="lo">📍 San Francisco, CA</div>
+    <div class="lo">San Francisco, CA</div>
     <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">6+ years of experience in product management, product design or equivalent consultant experience with significant time spent leading consumer mobile apps.</div>
     <a class="btn" href="https://app.careerpuck.com/job-board/lyft/job/8318645002?gh_jid=8318645002" target="_blank" rel="noopener">Apply →</a>
@@ -384,43 +404,43 @@
       <span class="ag ag-fresh">3d ago</span>
     </div>
     <div class="ti">Solutions Engineer</div>
-    <div class="lo">📍 San Francisco</div>
+    <div class="lo">San Francisco</div>
     <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-se">SE</span></div>
     <div class="ye yr">3–5+ years of experience in a solutions engineering, pre-sales technical, or technical consulting role within a SaaS or enterprise technology environment.</div>
     <a class="btn" href="https://www.asana.com/jobs/apply/7913978?gh_jid=7913978" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="8">🟢 This week · NYC only</div>
+  <div class="sec" data-sec="8" data-tier="0">This week · NYC only</div>
   <div data-sec="8" class="card" data-loc="nyc" data-age="0" data-pri="0" data-applied="0" data-hw="0" data-role="ops" data-search="cockroachlabs strategy &amp; operations manager, gtm new york, ny">
     <div class="top">
       <div class="co">Cockroachlabs</div>
       <span class="ag ag-fresh">3d ago</span>
     </div>
     <div class="ti">Strategy &amp; Operations Manager, GTM</div>
-    <div class="lo">📍 New York, NY</div>
+    <div class="lo">New York, NY</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-ops">Ops</span></div>
     <div class="ye yr">2-3 years of experience at a top-tier investment bank, management consulting firm, or high-growth technology company in a strategy, operations, or analytical role.</div>
     <a class="btn" href="https://www.cockroachlabs.com/careers/job/?gh_jid=7926263" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="9">🟢 This week · SF only</div>
+  <div class="sec" data-sec="9" data-tier="0">This week · SF only</div>
   <div data-sec="9" class="card" data-loc="sf" data-age="0" data-pri="0" data-applied="0" data-hw="0" data-role="sa" data-search="discord solutions architect, sf bay area san francisco bay area">
     <div class="top">
       <div class="co">Discord</div>
       <span class="ag ag-fresh">3d ago</span>
     </div>
     <div class="ti">Solutions Architect, SF Bay Area</div>
-    <div class="lo">📍 San Francisco Bay Area</div>
+    <div class="lo">San Francisco Bay Area</div>
     <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://job-boards.greenhouse.io/discord/jobs/8579738002" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="10">🟢 This week · Remote</div>
+  <div class="sec" data-sec="10" data-tier="0">This week · Remote</div>
   <div data-sec="10" class="card" data-loc="remote" data-age="0" data-pri="0" data-applied="0" data-hw="0" data-role="pm" data-search="airbnb product manager, api platform united states">
     <div class="top">
       <div class="co">Airbnb</div>
       <span class="ag ag-fresh">1d ago</span>
     </div>
     <div class="ti">Product Manager, API Platform</div>
-    <div class="lo">📍 United States</div>
+    <div class="lo">United States</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">8+ years of product management and/or product marketing experience.</div>
     <a class="btn" href="https://careers.airbnb.com/positions/7607680?gh_jid=7607680" target="_blank" rel="noopener">Apply →</a>
@@ -431,7 +451,7 @@
       <span class="ag ag-fresh">1d ago</span>
     </div>
     <div class="ti">Senior Solutions Architect, Pursuit (Presales)</div>
-    <div class="lo">📍 United States</div>
+    <div class="lo">United States</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye yr">Generous number of vacation days each year.</div>
     <a class="btn" href="https://jobs.elastic.co/jobs?gh_jid=7798051&amp;gh_jid=7798051" target="_blank" rel="noopener">Apply →</a>
@@ -442,7 +462,7 @@
       <span class="ag ag-fresh">2d ago</span>
     </div>
     <div class="ti">Manager, Solutions Architects - SF Bay area</div>
-    <div class="lo">📍 Remote, US</div>
+    <div class="lo">Remote, US</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gitlab/jobs/8396674002" target="_blank" rel="noopener">Apply →</a>
@@ -453,7 +473,7 @@
       <span class="ag ag-fresh">2d ago</span>
     </div>
     <div class="ti">Senior Solutions Architect</div>
-    <div class="lo">📍 Remote, US</div>
+    <div class="lo">Remote, US</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye yr">In your first year, you’ll focus on guiding high-value technical engagements, enabling successful platform adoption, shaping multi-team transformation strategies, mentoring other Solutions Architects, and helping customers see GitLab’s differentiated value in an evolving AI and DevSecOps market.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gitlab/jobs/8532929002" target="_blank" rel="noopener">Apply →</a>
@@ -464,7 +484,7 @@
       <span class="ag ag-fresh">2d ago</span>
     </div>
     <div class="ti">Solutions Architect</div>
-    <div class="lo">📍 Remote, US</div>
+    <div class="lo">Remote, US</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye yr">In your first year, you’ll focus on driving successful platform adoption, influencing revenue growth through solution selling, and building long-term, trust-based relationships that showcase GitLab’s differentiated position in an AI-driven DevSecOps landscape.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gitlab/jobs/8488396002" target="_blank" rel="noopener">Apply →</a>
@@ -475,7 +495,7 @@
       <span class="ag ag-fresh">3d ago</span>
     </div>
     <div class="ti">Senior Manager, Solutions Architect - East</div>
-    <div class="lo">📍 U.S. Remote</div>
+    <div class="lo">U.S. Remote</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye yr">3+ years leading technical post-sales teams (Solutions Architecture, Implementation, Sales Engineering) in SaaS/platform environments, with a track record of driving adoption and customer outcomes through hands-on leadership.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/webflow/jobs/7838402" target="_blank" rel="noopener">Apply →</a>
@@ -486,7 +506,7 @@
       <span class="ag ag-fresh">3d ago</span>
     </div>
     <div class="ti">Senior Manager, Solutions Engineering</div>
-    <div class="lo">📍 CA Remote (BC &amp; ON only); U.S. Remote</div>
+    <div class="lo">CA Remote (BC &amp; ON only); U.S. Remote</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-se">SE</span></div>
     <div class="ye yr">7+ years of Solutions Engineering experience at high-growth software companies, preferably one with a deeply technical, multi-product, solution.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/webflow/jobs/7974585" target="_blank" rel="noopener">Apply →</a>
@@ -497,7 +517,7 @@
       <span class="ag ag-fresh">3d ago</span>
     </div>
     <div class="ti">Senior Product Manager, Developer Productivity</div>
-    <div class="lo">📍 CA Remote (BC &amp; ON only); U.S. Remote</div>
+    <div class="lo">CA Remote (BC &amp; ON only); U.S. Remote</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">Have 3+ years of product management experience, with at least one of the following: a hands-on engineering background (you’ve shipped production code) or direct PM ownership of a developer experience, developer productivity, or platform/infrastructure product.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/webflow/jobs/7815489" target="_blank" rel="noopener">Apply →</a>
@@ -508,7 +528,7 @@
       <span class="ag ag-fresh">3d ago</span>
     </div>
     <div class="ti">Senior Solutions Architect, Microsoft SME</div>
-    <div class="lo">📍 Remote, North America</div>
+    <div class="lo">Remote, North America</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gitlab/jobs/8488427002" target="_blank" rel="noopener">Apply →</a>
@@ -519,7 +539,7 @@
       <span class="ag ag-fresh">7d ago</span>
     </div>
     <div class="ti">Manager, Solutions Architects - Commercial</div>
-    <div class="lo">📍 Remote, North America</div>
+    <div class="lo">Remote, North America</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gitlab/jobs/8503972002" target="_blank" rel="noopener">Apply →</a>
@@ -530,20 +550,20 @@
       <span class="ag ag-fresh">7d ago</span>
     </div>
     <div class="ti">Solutions Architect, Commercial - West</div>
-    <div class="lo">📍 Remote, North America</div>
+    <div class="lo">Remote, North America</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye yr">In your first year, you’ll focus on driving successful platform adoption, influencing revenue growth through solution selling, and building long-term, trust-based relationships that showcase GitLab’s differentiated position in an AI-driven DevSecOps landscape.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gitlab/jobs/8518629002" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="11">🟡 1–3 weeks ago · NYC + SF</div>
+  <div class="sec" data-sec="11" data-tier="1">1–3 weeks ago · NYC + SF</div>
   <div data-sec="11" class="card pri" data-loc="nyc+sf" data-age="1" data-pri="1" data-applied="0" data-hw="1" data-role="ops" data-search="thetradedesk associate manager, infrastructure bizops (foundation) bellevue; chicago; new york; san francisco; san jose">
     <div class="top">
       <div class="co">Thetradedesk</div>
       <span class="ag ag-recent">8d ago</span>
     </div>
     <div class="ti">Associate Manager, Infrastructure BizOps (Foundation)</div>
-    <div class="lo">📍 Bellevue; Chicago; New York; San Francisco; San Jose</div>
-    <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-ops">Ops</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">Bellevue; Chicago; New York; San Francisco; San Jose</div>
+    <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-ops">Ops</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">This role translates engineering demand into a fully- costed, multi-year capacity and CapEx plan, leads hardware and capacity sourcing, and structures the large commitments behind our on-prem buildouts.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/thetradedesk/jobs/5153140007" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -553,8 +573,8 @@
       <span class="ag ag-recent">8d ago</span>
     </div>
     <div class="ti">Group Product Manager, Invest</div>
-    <div class="lo">📍 NY - New York City; CA - San Francisco</div>
-    <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">NY - New York City; CA - San Francisco</div>
+    <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">10+ years of product management experience, including 3+ years directly leading and managing Product Managers.</div>
     <a class="btn" href="https://sofi.com/careers/job/7701322003?gh_jid=7701322003" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -564,20 +584,20 @@
       <span class="ag ag-recent">11d ago</span>
     </div>
     <div class="ti">Senior Technical Program Manager, Product</div>
-    <div class="lo">📍 New York, New York; San Francisco, California</div>
-    <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-tpm">TPM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">New York, New York; San Francisco, California</div>
+    <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-tpm">TPM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://job-boards.greenhouse.io/komodohealth/jobs/8547817002" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="12">🟡 1–3 weeks ago · SF only</div>
+  <div class="sec" data-sec="12" data-tier="1">1–3 weeks ago · SF only</div>
   <div data-sec="12" class="card pri" data-loc="sf" data-age="1" data-pri="1" data-applied="0" data-hw="0" data-role="pm" data-search="sofi senior product manager, home loans consumer experience wa - seattle; ca - san francisco   ">
     <div class="top">
       <div class="co">Sofi</div>
       <span class="ag ag-recent">11d ago</span>
     </div>
     <div class="ti">Senior Product Manager, Home Loans Consumer Experience</div>
-    <div class="lo">📍 WA - Seattle; CA - San Francisco   </div>
-    <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span></div>
+    <div class="lo">WA - Seattle; CA - San Francisco   </div>
+    <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span></div>
     <div class="ye yr">3+ years of product management experience.</div>
     <a class="btn" href="https://sofi.com/careers/job/7720241003?gh_jid=7720241003" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -587,55 +607,55 @@
       <span class="ag ag-recent">11d ago</span>
     </div>
     <div class="ti">Senior Product Manager, Servicing</div>
-    <div class="lo">📍 CA - San Francisco, WA - Seattle</div>
-    <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">CA - San Francisco, WA - Seattle</div>
+    <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">3+ years of product management experience, preferably in fintech, financial services, or a similarly regulated, data-intensive environment.</div>
     <a class="btn" href="https://sofi.com/careers/job/7720245003?gh_jid=7720245003" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="13">🟡 1–3 weeks ago · SF + Remote</div>
+  <div class="sec" data-sec="13" data-tier="1">1–3 weeks ago · SF + Remote</div>
   <div data-sec="13" class="card pri" data-loc="remote+sf" data-age="1" data-pri="1" data-applied="0" data-hw="1" data-role="se" data-search="pinterest ai solutions engineer san francisco, ca, us; remote, us">
     <div class="top">
       <div class="co">Pinterest</div>
       <span class="ag ag-recent">8d ago</span>
     </div>
     <div class="ti">AI Solutions Engineer</div>
-    <div class="lo">📍 San Francisco, CA, US; Remote, US</div>
-    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-se">SE</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">San Francisco, CA, US; Remote, US</div>
+    <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-se">SE</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://www.pinterestcareers.com/jobs/?gh_jid=7714127" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="14">🟡 1–3 weeks ago · Remote</div>
+  <div class="sec" data-sec="14" data-tier="1">1–3 weeks ago · Remote</div>
   <div data-sec="14" class="card pri" data-loc="remote" data-age="1" data-pri="1" data-applied="0" data-hw="0" data-role="pm" data-search="flex product owner, card programs remote / usa">
     <div class="top">
       <div class="co">Flex</div>
       <span class="ag ag-recent">8d ago</span>
     </div>
     <div class="ti">Product Owner, Card Programs</div>
-    <div class="lo">📍 Remote / USA</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span></div>
+    <div class="lo">Remote / USA</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://jobs.lever.co/Flex/1fad631d-1808-49bf-960d-c3413c9c5487" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="15">🟡 1–3 weeks ago · NYC only</div>
+  <div class="sec" data-sec="15" data-tier="1">1–3 weeks ago · NYC only</div>
   <div data-sec="15" class="card" data-loc="nyc" data-age="1" data-pri="0" data-applied="0" data-hw="0" data-role="pm" data-search="datadog product manager ii, ai &amp; data security new york, new york, usa">
     <div class="top">
       <div class="co">Datadog</div>
       <span class="ag ag-recent">8d ago</span>
     </div>
     <div class="ti">Product Manager II, AI &amp; Data Security</div>
-    <div class="lo">📍 New York, New York, USA</div>
+    <div class="lo">New York, New York, USA</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">You have 3+ years of product management experience building technical products, ideally in security, AI, data, cloud infrastructure, or developer platforms.</div>
     <a class="btn" href="https://careers.datadoghq.com/detail/7982288/?gh_jid=7982288" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="16">🟡 1–3 weeks ago · SF only</div>
+  <div class="sec" data-sec="16" data-tier="1">1–3 weeks ago · SF only</div>
   <div data-sec="16" class="card" data-loc="sf" data-age="1" data-pri="0" data-applied="0" data-hw="0" data-role="pm" data-search="lyft group product manager ii, pricing san francisco, ca">
     <div class="top">
       <div class="co">Lyft</div>
       <span class="ag ag-recent">9d ago</span>
     </div>
     <div class="ti">Group Product Manager II, Pricing</div>
-    <div class="lo">📍 San Francisco, CA</div>
+    <div class="lo">San Francisco, CA</div>
     <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">8+ years of product management or relevant experience, with significant time spent on algorithmic, data-driven, or marketplace products.</div>
     <a class="btn" href="https://app.careerpuck.com/job-board/lyft/job/8490440002?gh_jid=8490440002" target="_blank" rel="noopener">Apply →</a>
@@ -646,7 +666,7 @@
       <span class="ag ag-recent">9d ago</span>
     </div>
     <div class="ti">Group Product Manager, Verticals</div>
-    <div class="lo">📍 San Francisco, CA</div>
+    <div class="lo">San Francisco, CA</div>
     <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">6+ years of experience in product management, product design, or equivalent consulting experience with significant time spent leading consumer mobile apps or marketplace products.</div>
     <a class="btn" href="https://app.careerpuck.com/job-board/lyft/job/8513755002?gh_jid=8513755002" target="_blank" rel="noopener">Apply →</a>
@@ -657,7 +677,7 @@
       <span class="ag ag-recent">9d ago</span>
     </div>
     <div class="ti">Product Manager, Driver Earnings</div>
-    <div class="lo">📍 San Francisco, CA</div>
+    <div class="lo">San Francisco, CA</div>
     <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">3+ years in product management, product design or equivalent consultant experience with significant time spent leading consumer facing products .</div>
     <a class="btn" href="https://app.careerpuck.com/job-board/lyft/job/8550252002?gh_jid=8550252002" target="_blank" rel="noopener">Apply →</a>
@@ -668,19 +688,19 @@
       <span class="ag ag-recent">9d ago</span>
     </div>
     <div class="ti">Product Manager, Premium Modes</div>
-    <div class="lo">📍 San Francisco, CA</div>
+    <div class="lo">San Francisco, CA</div>
     <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">3+ years of product management experience, ideally with meaningful time spent on consumer-facing products.</div>
     <a class="btn" href="https://app.careerpuck.com/job-board/lyft/job/8514382002?gh_jid=8514382002" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="17">🟡 1–3 weeks ago · NYC only</div>
+  <div class="sec" data-sec="17" data-tier="1">1–3 weeks ago · NYC only</div>
   <div data-sec="17" class="card" data-loc="nyc" data-age="1" data-pri="0" data-applied="0" data-hw="0" data-role="se" data-search="braze solutions engineer, security &amp; privacy new york city">
     <div class="top">
       <div class="co">Braze</div>
       <span class="ag ag-recent">10d ago</span>
     </div>
     <div class="ti">Solutions Engineer, Security &amp; Privacy</div>
-    <div class="lo">📍 New York City</div>
+    <div class="lo">New York City</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-se">SE</span></div>
     <div class="ye yr">Experience: 3–5 years of blended experience spanning Solutions Consulting, Technical Pre-Sales, Information Security, or Technical IT Audit (e.g., Big 4 security advisory).</div>
     <a class="btn" href="https://boards.greenhouse.io/braze/jobs/7977098?gh_jid=7977098" target="_blank" rel="noopener">Apply →</a>
@@ -691,7 +711,7 @@
       <span class="ag ag-recent">15d ago</span>
     </div>
     <div class="ti">Product Manager II - Security Graph Foundations</div>
-    <div class="lo">📍 New York, New York, USA</div>
+    <div class="lo">New York, New York, USA</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">Minimum 3+ years in enterprise software, with a preference for security or data platform background.</div>
     <a class="btn" href="https://careers.datadoghq.com/detail/7950121/?gh_jid=7950121" target="_blank" rel="noopener">Apply →</a>
@@ -702,115 +722,115 @@
       <span class="ag ag-recent">16d ago</span>
     </div>
     <div class="ti">Partner Technology Solutions Engineer</div>
-    <div class="lo">📍 New York, New York, USA</div>
+    <div class="lo">New York, New York, USA</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-se">SE</span></div>
     <div class="ye yr">A technical expert with 3+ years of experience in a technical role (Support Engineering, Solutions Architecture, or Software Development).</div>
     <a class="btn" href="https://careers.datadoghq.com/detail/7961297/?gh_jid=7961297" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="18">🟡 1–3 weeks ago · Remote</div>
+  <div class="sec" data-sec="18" data-tier="1">1–3 weeks ago · Remote</div>
   <div data-sec="18" class="card" data-loc="remote" data-age="1" data-pri="0" data-applied="0" data-hw="0" data-role="pm" data-search="instacart senior product manager, agentic foundations united states - remote">
     <div class="top">
       <div class="co">Instacart</div>
       <span class="ag ag-recent">8d ago</span>
     </div>
     <div class="ti">Senior Product Manager, Agentic Foundations</div>
-    <div class="lo">📍 United States - Remote</div>
+    <div class="lo">United States - Remote</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">Own the Agentic Foundations vision, strategy, and multi-year roadmap; define a north star for an AI-native CX foundation—vendor-agnostic, API-first, and policy-consistent—while setting quantified targets for self-serve resolution rate, agent handle time, and platform reliability.</div>
     <a class="btn" href="https://instacart.careers/job/?gh_jid=7979354" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="19">🔴 3+ weeks ago · NYC only</div>
+  <div class="sec" data-sec="19" data-tier="2">3+ weeks ago · NYC only</div>
   <div data-sec="19" class="card pri" data-loc="nyc" data-age="2" data-pri="1" data-applied="0" data-hw="1" data-role="pm" data-search="salvohealth product manager new york, ny">
     <div class="top">
       <div class="co">Salvohealth</div>
       <span class="ag ag-stale">22d ago</span>
     </div>
     <div class="ti">Product Manager</div>
-    <div class="lo">📍 New York, NY</div>
-    <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">New York, NY</div>
+    <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">Work closely with product leadership to ensure alignment on strategy while owning execution details 2-5 years of product management experience, ideally in health tech, digital health, or tech-enabled services.</div>
     <a class="btn" href="https://jobs.lever.co/salvohealth/3b327f35-1ba9-4ddf-bb18-7c3cce52ecfd" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="20">🔴 3+ weeks ago · SF only</div>
+  <div class="sec" data-sec="20" data-tier="2">3+ weeks ago · SF only</div>
   <div data-sec="20" class="card pri" data-loc="sf" data-age="2" data-pri="1" data-applied="0" data-hw="1" data-role="pm" data-search="natera sr product manager - oracle fusion scm san carlos, ca">
     <div class="top">
       <div class="co">Natera</div>
       <span class="ag ag-stale">31d ago</span>
     </div>
     <div class="ti">Sr Product Manager - Oracle Fusion SCM</div>
-    <div class="lo">📍 San Carlos, CA</div>
-    <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">San Carlos, CA</div>
+    <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">10+ years of overall experience owning or delivering ERP Supply Chain solutions within IS&amp;T/IT.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/natera/jobs/5973806004" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="21">🔴 3+ weeks ago · NYC + SF</div>
+  <div class="sec" data-sec="21" data-tier="2">3+ weeks ago · NYC + SF</div>
   <div data-sec="21" class="card pri" data-loc="nyc+sf" data-age="2" data-pri="1" data-applied="0" data-hw="1" data-role="pm" data-search="gusto senior product manager, symmetry new tax products scottsdale, az;denver, co;san francisco, ca;new york, ny">
     <div class="top">
       <div class="co">Gusto</div>
       <span class="ag ag-stale">37d ago</span>
     </div>
     <div class="ti">Senior Product Manager, Symmetry New Tax Products</div>
-    <div class="lo">📍 Scottsdale, AZ;Denver, CO;San Francisco, CA;New York, NY</div>
-    <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">Scottsdale, AZ;Denver, CO;San Francisco, CA;New York, NY</div>
+    <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">Symmetry is the payroll infrastructure for software &amp; payroll platforms powering the paychecks of over 64 million workers each year.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/gusto/jobs/7532277" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="22">🔴 3+ weeks ago · SF only</div>
+  <div class="sec" data-sec="22" data-tier="2">3+ weeks ago · SF only</div>
   <div data-sec="22" class="card pri" data-loc="sf" data-age="2" data-pri="1" data-applied="0" data-hw="1" data-role="pm" data-search="veeva associate product manager - vault crm suite california - pleasanton">
     <div class="top">
       <div class="co">Veeva</div>
       <span class="ag ag-stale">46d ago</span>
     </div>
     <div class="ti">Associate Product Manager - Vault CRM Suite</div>
-    <div class="lo">📍 California - Pleasanton</div>
-    <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">California - Pleasanton</div>
+    <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">1+ years’ work experience in a fast-paced environment such as technology, consulting, finance, or analytics is preferred.</div>
     <a class="btn" href="https://jobs.lever.co/veeva/551b6963-1d68-4952-8dce-99950b658c72" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="23">🔴 3+ weeks ago · Remote</div>
+  <div class="sec" data-sec="23" data-tier="2">3+ weeks ago · Remote</div>
   <div data-sec="23" class="card pri" data-loc="remote" data-age="2" data-pri="1" data-applied="0" data-hw="1" data-role="pm" data-search="natera sr. technical product manager - data &amp; applied ai (patient experience &amp; commercial operations) us remote">
     <div class="top">
       <div class="co">Natera</div>
       <span class="ag ag-stale">35d ago</span>
     </div>
     <div class="ti">Sr. Technical Product Manager - Data &amp; Applied AI (Patient Experience &amp; Commercial Operations)</div>
-    <div class="lo">📍 US Remote</div>
-    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">★ priority</span><span class="pill pl-hw">🔩 fit</span></div>
+    <div class="lo">US Remote</div>
+    <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-pri">priority</span><span class="pill pl-hw">fit</span></div>
     <div class="ye yr">7+ years of relevant experience (e.g., product management, applied AI/ML engineering, technical founder, forward-deployed engineering), including 3+ years building data products, AI/ML systems, or related platforms.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/natera/jobs/5850674004" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="24">🔴 3+ weeks ago · NYC only</div>
+  <div class="sec" data-sec="24" data-tier="2">3+ weeks ago · NYC only</div>
   <div data-sec="24" class="card" data-loc="nyc" data-age="2" data-pri="0" data-applied="0" data-hw="0" data-role="se" data-search="alloy solutions engineer associate new york city">
     <div class="top">
       <div class="co">Alloy</div>
       <span class="ag ag-stale">22d ago</span>
     </div>
     <div class="ti">Solutions Engineer Associate</div>
-    <div class="lo">📍 New York City</div>
+    <div class="lo">New York City</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-se">SE</span></div>
     <div class="ye yr">Magazine’s Best Workplaces , Forbes America’s Best Startup Employers , Best Fintech to Work for by American Banker , year after year.</div>
     <a class="btn" href="https://www.alloy.com/about/jobs/detail?gh_jid=8500155002&amp;gh_jid=8500155002" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="25">🔴 3+ weeks ago · NYC + SF</div>
+  <div class="sec" data-sec="25" data-tier="2">3+ weeks ago · NYC + SF</div>
   <div data-sec="25" class="card" data-loc="nyc+sf" data-age="2" data-pri="0" data-applied="0" data-hw="0" data-role="sa" data-search="thetradedesk solutions architect, anaplan chicago; irvine; los angeles; new york; san francisco; san jose; seattle; ventura">
     <div class="top">
       <div class="co">Thetradedesk</div>
       <span class="ag ag-stale">23d ago</span>
     </div>
     <div class="ti">Solutions Architect, Anaplan</div>
-    <div class="lo">📍 Chicago; Irvine; Los Angeles; New York; San Francisco; San Jose; Seattle; Ventura</div>
+    <div class="lo">Chicago; Irvine; Los Angeles; New York; San Francisco; San Jose; Seattle; Ventura</div>
     <div class="tags"><span class="pill pl-nyc+sf">NYC · SF</span><span class="pill pl-role pl-rt-sa">SA</span></div>
     <div class="ye yr">Plus, expected benefits for this role include comprehensive healthcare (medical, dental, and vision) with premiums paid in full for employees and dependents, retirement benefits such as a 401k plan and company match, short and long-term disability coverage, basic life insurance, well-being benefits,</div>
     <a class="btn" href="https://job-boards.greenhouse.io/thetradedesk/jobs/5139192007" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="26">🔴 3+ weeks ago · NYC only</div>
+  <div class="sec" data-sec="26" data-tier="2">3+ weeks ago · NYC only</div>
   <div data-sec="26" class="card" data-loc="nyc" data-age="2" data-pri="0" data-applied="0" data-hw="0" data-role="pm" data-search="datadog group product manager - threat detection and incident response (cloud siem) new york, new york, usa">
     <div class="top">
       <div class="co">Datadog</div>
       <span class="ag ag-stale">28d ago</span>
     </div>
     <div class="ti">Group Product Manager - Threat Detection and Incident Response (Cloud SIEM)</div>
-    <div class="lo">📍 New York, New York, USA</div>
+    <div class="lo">New York, New York, USA</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">7+ years of experience in B2B SaaS product management, including 2+ years leading product managers.</div>
     <a class="btn" href="https://careers.datadoghq.com/detail/7608826/?gh_jid=7608826" target="_blank" rel="noopener">Apply →</a>
@@ -821,7 +841,7 @@
       <span class="ag ag-stale">28d ago</span>
     </div>
     <div class="ti">Product Manager II - Identity Security</div>
-    <div class="lo">📍 New York, New York, USA</div>
+    <div class="lo">New York, New York, USA</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">Minimum 3+ years in enterprise software, with a preference for security or cloud infrastructure background.</div>
     <a class="btn" href="https://careers.datadoghq.com/detail/7776413/?gh_jid=7776413" target="_blank" rel="noopener">Apply →</a>
@@ -832,7 +852,7 @@
       <span class="ag ag-stale">28d ago</span>
     </div>
     <div class="ti">Senior Product Manager - Network Path</div>
-    <div class="lo">📍 New York, New York, USA</div>
+    <div class="lo">New York, New York, USA</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">Have 3+ years of B2B SaaS Product Management experience, with specific exposure to Network Performance Monitoring, Cloud Infrastructure, or IT Operations.</div>
     <a class="btn" href="https://careers.datadoghq.com/detail/7763117/?gh_jid=7763117" target="_blank" rel="noopener">Apply →</a>
@@ -843,8 +863,8 @@
       <span class="ag ag-stale">30d ago</span>
     </div>
     <div class="ti">Product Manager, Scibids AI</div>
-    <div class="lo">📍 NYC Global HQ</div>
-    <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-lang">🌐 lang</span></div>
+    <div class="lo">NYC Global HQ</div>
+    <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span><span class="pill pl-lang">lang</span></div>
     <div class="ye yr">Work experience: A minimum of 3 years of product management experience, with ideally 1-2 years into adtech.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/doubleverify/jobs/8490250002" target="_blank" rel="noopener">Apply →</a>
   </div>
@@ -854,7 +874,7 @@
       <span class="ag ag-stale">38d ago</span>
     </div>
     <div class="ti">Senior Product Manager, Learning</div>
-    <div class="lo">📍 New York, NY</div>
+    <div class="lo">New York, NY</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://careers.duolingo.com/jobs/8377539002?gh_jid=8377539002" target="_blank" rel="noopener">Apply →</a>
@@ -865,7 +885,7 @@
       <span class="ag ag-stale">38d ago</span>
     </div>
     <div class="ti">Senior Product Manager, Monetization</div>
-    <div class="lo">📍 New York, NY</div>
+    <div class="lo">New York, NY</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://careers.duolingo.com/jobs/8474673002?gh_jid=8474673002" target="_blank" rel="noopener">Apply →</a>
@@ -876,7 +896,7 @@
       <span class="ag ag-stale">46d ago</span>
     </div>
     <div class="ti">Senior Product Manager, In-App Purchases</div>
-    <div class="lo">📍 New York, NY</div>
+    <div class="lo">New York, NY</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://careers.duolingo.com/jobs/8400738002?gh_jid=8400738002" target="_blank" rel="noopener">Apply →</a>
@@ -887,7 +907,7 @@
       <span class="ag ag-stale">46d ago</span>
     </div>
     <div class="ti">Senior Product Manager, Notifications</div>
-    <div class="lo">📍 New York, NY</div>
+    <div class="lo">New York, NY</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://careers.duolingo.com/jobs/8409034002?gh_jid=8409034002" target="_blank" rel="noopener">Apply →</a>
@@ -898,55 +918,55 @@
       <span class="ag ag-stale">56d ago</span>
     </div>
     <div class="ti">Product Owner - CSM Applications</div>
-    <div class="lo">📍 New York, New York</div>
+    <div class="lo">New York, New York</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://jobs.lever.co/contentsquare/1860f3f2-68d2-40b8-9e4a-43c756be1142" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="27">🔴 3+ weeks ago · SF only</div>
+  <div class="sec" data-sec="27" data-tier="2">3+ weeks ago · SF only</div>
   <div data-sec="27" class="card" data-loc="sf" data-age="2" data-pri="0" data-applied="0" data-hw="0" data-role="fde" data-search="mistral applied ai, forward deployed machine learning engineer - palo alto palo alto">
     <div class="top">
       <div class="co">Mistral</div>
       <span class="ag ag-stale">58d ago</span>
     </div>
     <div class="ti">Applied AI, Forward Deployed Machine Learning Engineer - Palo Alto</div>
-    <div class="lo">📍 Palo Alto</div>
+    <div class="lo">Palo Alto</div>
     <div class="tags"><span class="pill pl-sf">SF</span><span class="pill pl-role pl-rt-fde">FDE</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://jobs.lever.co/mistral/0b476d3a-5f0c-4dda-9a5e-bd5ed8515328" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="28">🔴 3+ weeks ago · NYC only</div>
+  <div class="sec" data-sec="28" data-tier="2">3+ weeks ago · NYC only</div>
   <div data-sec="28" class="card" data-loc="nyc" data-age="2" data-pri="0" data-applied="0" data-hw="0" data-role="pm" data-search="mistral product manager, cloud partnerships new york">
     <div class="top">
       <div class="co">Mistral</div>
       <span class="ag ag-stale">59d ago</span>
     </div>
     <div class="ti">Product Manager, Cloud Partnerships</div>
-    <div class="lo">📍 New York</div>
+    <div class="lo">New York</div>
     <div class="tags"><span class="pill pl-nyc">NYC</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye ns">not stated</div>
     <a class="btn" href="https://jobs.lever.co/mistral/ca22a1ac-c87e-4463-914a-6753ca79318c" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="29">🔴 3+ weeks ago · SF + Remote</div>
+  <div class="sec" data-sec="29" data-tier="2">3+ weeks ago · SF + Remote</div>
   <div data-sec="29" class="card" data-loc="remote+sf" data-age="2" data-pri="0" data-applied="0" data-hw="0" data-role="pm" data-search="airbnb product manager, relevance and personalization san francisco, united states">
     <div class="top">
       <div class="co">Airbnb</div>
       <span class="ag ag-stale">36d ago</span>
     </div>
     <div class="ti">Product Manager, Relevance and Personalization</div>
-    <div class="lo">📍 San Francisco, United States</div>
+    <div class="lo">San Francisco, United States</div>
     <div class="tags"><span class="pill pl-remote+sf">SF · Remote</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">10+ years of product management experience, with at least 3 years on ML, search, recommendations, or AI-powered products at scale .</div>
     <a class="btn" href="https://careers.airbnb.com/positions/7905365?gh_jid=7905365" target="_blank" rel="noopener">Apply →</a>
   </div>
-  <div class="sec" data-sec="30">🔴 3+ weeks ago · Remote</div>
+  <div class="sec" data-sec="30" data-tier="2">3+ weeks ago · Remote</div>
   <div data-sec="30" class="card" data-loc="remote" data-age="2" data-pri="0" data-applied="0" data-hw="0" data-role="ops" data-search="attentive strategy &amp; operations associate united states">
     <div class="top">
       <div class="co">Attentive</div>
       <span class="ag ag-stale">24d ago</span>
     </div>
     <div class="ti">Strategy &amp; Operations Associate</div>
-    <div class="lo">📍 United States</div>
+    <div class="lo">United States</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-ops">Ops</span></div>
     <div class="ye yr">We’re proud to be included in Deloitte’s Fast 500 (four years running!), LinkedIn’s Top Startups , Forbes’ Cloud 100 (five years running!), Inc.’s Best Workplaces , and the Human Rights Campaign Foundation&#x27;s Corporate Equality Index !.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/attentive/jobs/4182606009" target="_blank" rel="noopener">Apply →</a>
@@ -957,7 +977,7 @@
       <span class="ag ag-stale">29d ago</span>
     </div>
     <div class="ti">Product Manager, Data Platform Integrations</div>
-    <div class="lo">📍 United States</div>
+    <div class="lo">United States</div>
     <div class="tags"><span class="pill pl-remote">Remote</span><span class="pill pl-role pl-rt-pm">PM</span></div>
     <div class="ye yr">We’re proud to be included in Deloitte’s Fast 500 (four years running!), LinkedIn’s Top Startups , Forbes’ Cloud 100 (five years running!), Inc.’s Best Workplaces , and the Human Rights Campaign Foundation&#x27;s Corporate Equality Index !.</div>
     <a class="btn" href="https://job-boards.greenhouse.io/attentive/jobs/4247514009" target="_blank" rel="noopener">Apply →</a>
@@ -966,14 +986,14 @@
   <div class="empty" id="empty">No roles match these filters.</div>
 
   <details>
-    <summary>▸ Stretch bucket — 4+ yrs stated (0 roles)</summary>
+    <summary>Stretch bucket — 4+ yrs stated (0 roles)</summary>
     <div id="blist">
 
     </div>
   </details>
 
   <div class="manifest">
-    74 roles from live ATS JSON · 74 in-range (30 ★) · 0 stretch.
+    74 roles from live ATS JSON · 74 in-range (30 priority) · 0 stretch.
     Every role traces to a live API call; titles, locations, and the years sentence are copied
     verbatim from the JD — none inferred. Synced 2026-06-13.
   </div>
