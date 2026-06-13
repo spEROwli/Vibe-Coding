@@ -34,13 +34,21 @@ TITLE_MUST_INCLUDE = [
 ]
 TITLE_EXCLUDE = ["marketing", "product marketing"]
 
-# Executive/level markers that disqualify regardless of where they appear —
-# VP/Director/Principal/Staff are categorically above the IC bar this tool targets.
+# Unambiguous executive titles — categorically above the IC bar, dropped on the
+# title alone. NOTE: "senior associate" is deliberately NOT here — at many firms
+# (e.g. Capital One) it is an early-career, 1-2-years-out title and must pass.
+# Seniority is judged by the stated YEARS requirement (EXPERIENCE_CAP), not by
+# soft title words like "Senior"/"Lead", which are noisy and produce false drops.
 _HARD_SENIOR_RE = re.compile(
-    r'(?<!\w)(?:vice\s+president|vp|svp|evp|senior\s+associate|head\s+of|'
+    r'(?<!\w)(?:vice\s+president|vp|svp|evp|head\s+of|'
     r'principal|staff|director|managing\s+director|md)(?!\w)',
     re.IGNORECASE,
 )
+
+# Experience bar (parametric knob). Keep roles requiring <= this many years, plus
+# any role with no stated requirement. Roles explicitly requiring MORE are dropped
+# at scrape time. The parsed years value is the ground truth — never the title.
+EXPERIENCE_CAP = 3
 
 NYC_LOCS    = ["new york", "nyc", "brooklyn", "manhattan"]
 SF_LOCS     = [
@@ -340,7 +348,9 @@ def _passes_title(title: str) -> bool:
         return False
     if any(kw in t for kw in TITLE_EXCLUDE):
         return False
-    # Hard executive markers (VP/Director/Principal/Staff/MD) disqualify anywhere.
+    # Only unambiguous executive titles disqualify on the title alone. Seniority
+    # otherwise is enforced by the stated-years gate (EXPERIENCE_CAP) downstream,
+    # so a "Senior Associate" or a "Senior PM" with a <=3yr bar is NOT dropped here.
     if _HARD_SENIOR_RE.search(t):
         return False
     return True
@@ -839,28 +849,13 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
             except Exception as e:
                 print(f"  {fn_name}({slug}) error: {e}", file=sys.stderr)
 
-    # ── The Muse: fresh NYC Product-Management roles across all companies
-    #    (primary source of relevance — the fixed ATS list above is supplementary;
-    #    hiring.cafe is unusable: fully behind Cloudflare bot protection) ────────
-    print("\nQuerying The Muse for NYC roles (PM/TPM/FDE/SE/SA/Ops)…")
-    try:
-        raw.extend(fetch_themuse())
-    except Exception as e:
-        print(f"  [themuse] skipped: {e}", file=sys.stderr)
-
-    # ── Remotive: fresh US-remote roles across all target types ──────────────
-    print("Querying Remotive for US-remote roles…")
-    try:
-        raw.extend(fetch_remotive())
-    except Exception as e:
-        print(f"  [remotive] skipped: {e}", file=sys.stderr)
-
-    # ── Adzuna: broad US keyword search — all target role types ──────────────
-    print("Querying Adzuna for US roles (all types, NYC + SF + nationwide)…")
-    try:
-        raw.extend(fetch_adzuna())
-    except Exception as e:
-        print(f"  [adzuna] skipped: {e}", file=sys.stderr)
+    # ── ATS-DIRECT ONLY ──────────────────────────────────────────────────────
+    # Aggregator sources (The Muse, Remotive, Adzuna) are intentionally NOT called.
+    # Adzuna redirects through its own domain instead of the company apply page;
+    # The Muse links to its own landing pages; Remotive returns ~0 matches. Every
+    # role here comes from Greenhouse/Ashby/Lever, whose URLs are the company's
+    # own application page — a clean direct link, every time. (fetch_themuse /
+    # fetch_remotive / fetch_adzuna remain defined but unused.)
 
     # ── freshness filter: drop stale postings with a known age > MAX_AGE_DAYS ──
     def _too_old(j: dict) -> bool:
@@ -873,6 +868,21 @@ def cmd_local(remote_only: bool, include_unknown_loc: bool = False):
         print(f"\nDropped {len(stale)} stale role(s) older than {MAX_AGE_DAYS}d "
               f"(e.g. {', '.join(sorted({j['company'] for j in stale}))[:80]})")
     raw = [j for j in raw if not _too_old(j)]
+
+    # ── experience-bar gate (hard requirement): drop ONLY roles that explicitly
+    #    state more than EXPERIENCE_CAP years. Unstated years and 0-EXPERIENCE_CAP
+    #    both pass. years_raw is the optimistic low-end from _parse_years, so a
+    #    "3-5 years" role reads as 3 and is kept. Title seniority never gates here.
+    def _over_bar(j: dict) -> bool:
+        try:
+            return int(j["years_raw"]) > EXPERIENCE_CAP
+        except (ValueError, TypeError):
+            return False   # "unknown" / unstated → keep
+    over = [j for j in raw if _over_bar(j)]
+    if over:
+        print(f"Dropped {len(over)} role(s) explicitly requiring >{EXPERIENCE_CAP}yrs "
+              f"(e.g. {', '.join(sorted({j['company'] for j in over}))[:80]})")
+    raw = [j for j in raw if not _over_bar(j)]
 
     # ── location filter (unknown excluded by default — P2) ───────────────────
     unknown_count = sum(1 for j in raw if j["loc_class"] == "unknown")
